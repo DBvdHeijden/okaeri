@@ -2,13 +2,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-Kind = Literal["paper", "blog", "forum", "scitech", "news"]
-KINDS: tuple[Kind, ...] = ("paper", "blog", "forum", "scitech", "news")
-KIND_LABELS: dict[Kind, str] = {
-    "paper": "Papers", "blog": "Blogs", "forum": "Forums", "scitech": "Sci & Tech", "news": "News",
-}
-# How long a story stays on the homepage. World news goes stale fast; blogs post rarely.
-MAX_AGE_DAYS: dict[Kind, int] = {"paper": 14, "blog": 60, "forum": 7, "scitech": 14, "news": 3}
+# How long a story stays on the homepage, by format tag. News goes stale fast; blogs post rarely.
+MAX_AGE_DAYS: dict[str, int] = {"paper": 14, "blog": 60, "forum": 7, "news": 3}
 
 # "rss" covers RSS and Atom (feedparser handles both); the rest are JSON APIs
 # used where the RSS feed lacks points and comment counts.
@@ -19,7 +14,7 @@ Fetcher = Literal["rss", "hf_papers", "hn_algolia", "lobsters_json", "lw_graphql
 class Source:
     id: str
     name: str
-    kind: Kind
+    tags: tuple[str, ...]  # exactly one format tag, 0-2 topic tags; read through app.sources
     url: str  # what we fetch
     site: str  # what we show
     description: str = ""
@@ -56,7 +51,7 @@ class Article:
     title: str
     url: str
     source: str
-    kind: Kind
+    source_id: str
     published_at: datetime  # for History: when it was opened
     also_on: tuple[str, ...] = ()
     key: str = ""

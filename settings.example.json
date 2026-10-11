@@ -1,5 +1,12 @@
 {
   "sources": {
     "enabled": []
-  }
+  },
+  "tabs": [
+    {"name": "AI", "tags": ["ai"]},
+    {"name": "Papers", "tags": ["paper"]},
+    {"name": "Science", "tags": ["science", "physics", "math"]},
+    {"name": "Tech", "tags": ["software", "tech"]},
+    {"name": "World", "tags": ["world"]}
+  ]
 }

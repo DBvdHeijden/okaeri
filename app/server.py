@@ -14,9 +14,9 @@ from fastapi.templating import Jinja2Templates
 
 from app import settings
 from app.fetch import Refresher
-from app.models import KIND_LABELS, KINDS, Article
+from app.models import Article
 from app.rank import rank
-from app.sources import BY_ID, SOURCES
+from app.sources import BY_ID, SOURCES, format_of, in_tab, source_format
 from app.store import Store, default_path, open_store
 
 log = logging.getLogger("okaeri")
@@ -24,9 +24,9 @@ log = logging.getLogger("okaeri")
 HERE = Path(__file__).parent
 PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 
-TABS = [("all", "All"), *KIND_LABELS.items()]
+ALL = ("all", "All")  # always the first tab
 HISTORY = ("history", "History")  # always the last tab, aligned right
-
+FORMAT_GROUPS = {"paper": "Papers", "blog": "Blogs", "forum": "Forums", "news": "News"}  # onboarding sections
 
 
 def store() -> Store:
@@ -81,25 +81,23 @@ def count(n: int, word: str) -> str:
 
 templates.env.filters["ago"] = ago
 templates.env.filters["count"] = count
+templates.env.globals["format_of"] = format_of
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, kind: str = "all", n: Annotated[int, Query(ge=1)] = PAGE_SIZE):
+def home(request: Request, tab: str = "all", n: Annotated[int, Query(ge=1)] = PAGE_SIZE):
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     if not selected:
         return RedirectResponse("/onboarding", status_code=303)
-    # Only offer tabs for kinds the user follows; one kind needs no tabs at all.
-    kinds = {s.kind for s in selected.values()}
-    tabs = [(value, label) for value, label in TABS if value == "all" or value in kinds]
-    if len(tabs) <= 2:
-        tabs = tabs[:1]
-    tabs.append(HISTORY)
-    if kind not in kinds and kind != "history":
-        kind = "all"
-    if kind == "history":
+    user_tabs = settings.tabs()
+    active = next((t for t in user_tabs if t["slug"] == tab), None)
+    if tab == "history":
         ranked = store().history(BY_ID)  # chronological by design; not a recommendation, so not ranked
     else:
-        pool = [a for a in store().articles(selected) if kind == "all" or a.kind == kind]
+        tab = active["slug"] if active else "all"
+        pool = store().articles(selected)
+        if active:
+            pool = [a for a in pool if in_tab(a, active["tags"])]
         ranked = rank(pool, store().events(), settings.load())
     return templates.TemplateResponse(
         request,
@@ -109,8 +107,8 @@ def home(request: Request, kind: str = "all", n: Annotated[int, Query(ge=1)] = P
             "more": len(ranked) > n,
             "n": n,
             "page_size": PAGE_SIZE,
-            "kind": kind,
-            "tabs": tabs,
+            "tab": tab,
+            "tabs": [ALL, *((t["slug"], t["name"]) for t in user_tabs), HISTORY],
             "pending": store().pending(selected),
             "today": datetime.now().strftime("%A, %-d %B"),
         },
@@ -155,7 +153,7 @@ def favicon():
 
 @app.get("/onboarding", response_class=HTMLResponse)
 def onboarding(request: Request):
-    groups = [(KIND_LABELS[k], [s for s in SOURCES if s.kind == k]) for k in KINDS]
+    groups = [(label, [s for s in SOURCES if source_format(s) == f]) for f, label in FORMAT_GROUPS.items()]
     return templates.TemplateResponse(
         request, "onboarding.html", {"groups": groups, "selected": settings.enabled_sources()}
     )

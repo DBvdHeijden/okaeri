@@ -11,7 +11,8 @@ from functools import cache
 from pathlib import Path
 
 from app import ROOT
-from app.models import KINDS, MAX_AGE_DAYS, Article, Event, FetchedItem, Source
+from app.models import MAX_AGE_DAYS, Article, Event, FetchedItem, Source
+from app.sources import FORMATS, source_format
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -55,10 +56,10 @@ CREATE INDEX IF NOT EXISTS events_key ON events (key);
 # Columns added after the first release; added in place to existing databases.
 MIGRATIONS = {"items": {"score": "INTEGER", "comments": "INTEGER", "id": "TEXT"}}
 
-# When the same story comes from several sources, the first kind here is shown;
+# When the same story comes from several sources, the first format here is shown;
 # the others become "also on". Forums last: they mostly link to someone else's post.
-PRIMARY_ORDER = {kind: i for i, kind in enumerate(("paper", "blog", "scitech", "news", "forum"))}
-assert set(PRIMARY_ORDER) == set(KINDS)
+PRIMARY_ORDER = {fmt: i for i, fmt in enumerate(("paper", "blog", "news", "forum"))}
+assert set(PRIMARY_ORDER) == FORMATS
 
 
 def _same_publisher(a: str, b: str) -> bool:
@@ -244,12 +245,12 @@ class Store:
     def articles(self, sources: dict[str, Source]) -> list[Article]:
         """Stories from the given sources, merged across sources by key. Unranked.
 
-        Each source's items are limited to its kind's MAX_AGE_DAYS.
+        Each source's items are limited to its format's MAX_AGE_DAYS.
         """
         if not sources:
             return []
         now = datetime.now(UTC)
-        cutoffs = {i: _iso(now - timedelta(days=MAX_AGE_DAYS[s.kind])) for i, s in sources.items()}
+        cutoffs = {i: _iso(now - timedelta(days=MAX_AGE_DAYS[source_format(s)])) for i, s in sources.items()}
         cutoff = min(cutoffs.values())
         marks = ",".join("?" * len(sources))
         with self._conn() as db:
@@ -273,7 +274,7 @@ def _merge(groups: dict[str, list[tuple]], sources: dict[str, Source]) -> list[A
     """One Article per key from its item rows across sources."""
     articles = []
     for key, group in groups.items():
-        group.sort(key=lambda r: (PRIMARY_ORDER[sources[r[0]].kind], r[6]))
+        group.sort(key=lambda r: (PRIMARY_ORDER[source_format(sources[r[0]])], r[6]))
         source_id, _, url, title, summary, discussion_url, published_at, score, comments = group[0]
         primary = sources[source_id]
         also_on = tuple(dict.fromkeys(
@@ -294,7 +295,7 @@ def _merge(groups: dict[str, list[tuple]], sources: dict[str, Source]) -> list[A
             title=title,
             url=url,
             source=primary.name,
-            kind=primary.kind,
+            source_id=source_id,
             published_at=datetime.fromisoformat(published_at),
             also_on=also_on,
             discussion_url=discussion_url,

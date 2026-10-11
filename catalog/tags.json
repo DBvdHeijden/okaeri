@@ -1,0 +1,4 @@
+{
+  "formats": ["paper", "blog", "forum", "news"],
+  "topics": ["ai", "software", "tech", "science", "physics", "math", "world"]
+}

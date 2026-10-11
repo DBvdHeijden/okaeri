@@ -33,11 +33,12 @@ uv run scripts/make_favicon.py
 
 - `main.py`: starts uvicorn on 127.0.0.1:12362, one worker.
 - `catalog/sources.json`: the curated source catalog.
-- `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it.
+- `catalog/tags.json`: the tag vocabulary: formats (paper, blog, forum, news) and topics.
+- `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it. Tabs live here as `{"name", "tags"}`.
 - `data/`: the SQLite database (gitignored).
 - `app/server.py`: routes. Every article list passes through `rank()`.
 - `app/rank.py`: the ranking seam. It currently sorts by recency.
-- `app/sources.py`: loads the catalog.
+- `app/sources.py`: loads the catalog; `tags_for()`, `format_of()` and tab matching.
 - `app/fetch.py`: feed parsing (RSS/Atom, HF papers), conditional GET, and the background refresher.
 - `app/settings.py`: reads and writes `settings.json`.
 - `app/store.py`: SQLite: items, per-feed cache headers, and user events (click, hide, …).
