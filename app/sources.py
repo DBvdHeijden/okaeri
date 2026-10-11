@@ -37,6 +37,13 @@ SOURCES: list[Source] = [_source(s) for s in json.loads((ROOT / "catalog" / "sou
 BY_ID: dict[str, Source] = {s.id: s for s in SOURCES}
 
 
+def known_sources(ids: Iterable[str], where: str) -> tuple[str, ...]:
+    for id in ids:
+        if id not in BY_ID:
+            log.warning("%s: ignoring unknown source %r", where, id)
+    return tuple(id for id in ids if id in BY_ID)
+
+
 def source_format(source: Source) -> str:
     return next(t for t in source.tags if t in FORMATS)
 
@@ -58,7 +65,17 @@ def source_matches(source: Source, formats: Iterable[str], topics: Iterable[str]
     return not topics or not own_topics or bool(own_topics & topics)
 
 
-def in_tab(article: Article, tab_tags: Iterable[str]) -> bool:
-    """Any tag within a group (formats, topics) matches; every group the tab uses must match."""
-    have, wanted = tags_for(article), set(tab_tags)
-    return all(have & group for group in (wanted & FORMATS, wanted & TOPICS) if group)
+def tab_covers(source: Source, tab_tags: Iterable[str], tab_sources: Iterable[str]) -> bool:
+    """Each part narrows the one before: its formats, then its topics within those, then just its picked sources.
+    A part with nothing picked doesn't narrow."""
+    formats, topics, picked = set(tab_tags) & FORMATS, set(tab_tags) & TOPICS, set(tab_sources)
+    return (
+        (not formats or source_format(source) in formats)
+        and (not topics or bool(topics & set(source.tags)))
+        and (not picked or source.id in picked)
+    )
+
+
+def in_tab(article: Article, tab_tags: Iterable[str], tab_sources: Iterable[str]) -> bool:
+    """In the tab if any source the story came from is one the tab covers."""
+    return any(tab_covers(BY_ID[s], tab_tags, tab_sources) for s in article.source_ids)

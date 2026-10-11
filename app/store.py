@@ -352,6 +352,7 @@ def _merge(groups: dict[str, list[tuple]], sources: dict[str, Source]) -> list[A
             score=score,
             comments=comments,
             summary=summary,
+            source_ids=tuple(dict.fromkeys(r[0] for r in group)),
         ))
     return articles
 

@@ -126,7 +126,7 @@ def home(
     if active["history"]:
         ranked = history(show)
     else:
-        pool = [a for a in store().articles(selected) if in_tab(a, active["tags"])]
+        pool = [a for a in store().articles(selected) if in_tab(a, active["tags"], active["sources"])]
         ranked = rank(pool, store().events(), settings.load())
     return templates.TemplateResponse(
         request,
@@ -204,6 +204,24 @@ def wake_refresher(request: Request) -> None:
 
 # Settings: the sources you follow, and a way back into onboarding. Onboarding is only for when nothing is picked yet.
 
+def tab_editor_context() -> dict:
+    """What the tab editor (_tabs.html) needs, in Settings and onboarding step 4."""
+    tabs = settings.all_tabs()
+    # The sources you follow, plus any a tab still uses, so saving never silently drops one.
+    ids = {*settings.enabled_sources(), *(s for t in tabs for s in t["sources"])}
+    return {
+        "tabs": tabs,
+        "formats": list(FORMAT_GROUPS),
+        "topics": sorted(TOPICS),
+        "source_choices": sorted((BY_ID[i] for i in ids if i in BY_ID), key=lambda s: s.name.lower()),
+        "max_tabs": settings.MAX_TABS,
+    }
+
+
+templates.env.filters["source_name"] = lambda id: BY_ID[id].name
+templates.env.globals["source_format"] = source_format
+
+
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
     enabled = settings.enabled_sources()
@@ -216,14 +234,7 @@ def settings_page(request: Request):
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {
-            "groups": groups,
-            "selected": enabled,
-            "tabs": settings.all_tabs(),
-            "tag_groups": [sorted(TOPICS), list(FORMAT_GROUPS)],
-            "max_tabs": settings.MAX_TABS,
-            "progress": background_work(request),
-        },
+        {**tab_editor_context(), "groups": groups, "selected": enabled, "progress": background_work(request)},
     )
 
 
@@ -240,7 +251,7 @@ def settings_submit(
     return RedirectResponse("/", status_code=303)
 
 
-# Onboarding: interests, then sources, then a sample of stories to seed ranking.
+# Onboarding: interests, then sources, then a sample of stories to rate, then (optionally) tabs.
 
 def source_count(tag: str) -> int:
     return sum(tag in s.tags for s in SOURCES)
@@ -294,7 +305,10 @@ def onboarding_sources_submit(request: Request, sources: Annotated[list[str] | N
 def onboarding_sample(request: Request):
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     interests = settings.interests()
-    pool = [a for a in store().articles(selected) if in_tab(a, [*interests["formats"], *interests["topics"]])]
+    pool = [
+        a for a in store().articles(selected)
+        if any(source_matches(BY_ID[s], interests["formats"], interests["topics"]) for s in a.source_ids)
+    ]
     events = store().events()
     rated = switched_on(events, "seed", "unseed") | switched_on(events, "hide", "unhide")
     unrated = [a for a in rank(pool, events, settings.load()) if a.key not in rated]
@@ -304,6 +318,18 @@ def onboarding_sample(request: Request):
         "onboarding_sample.html",
         {"articles": sample(unrated, SAMPLE_SIZE), "pending": store().pending(selected)},
     )
+
+
+@app.get("/onboarding/tabs", response_class=HTMLResponse)
+def onboarding_tabs(request: Request):
+    return templates.TemplateResponse(request, "onboarding_tabs.html", tab_editor_context())
+
+
+@app.post("/onboarding/tabs")
+def onboarding_tabs_submit(tabs: Annotated[str | None, Form()] = None):  # JSON from the tab editor; absent without JS
+    if tabs is not None:
+        settings.set_tabs(json.loads(tabs))
+    return RedirectResponse("/", status_code=303)
 
 
 @app.post("/rate/{id}")

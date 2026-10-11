@@ -82,7 +82,7 @@ Layout:
 - `main.py`: runs the server (uvicorn on 127.0.0.1, one worker) and the service commands.
 - `catalog/sources.json`: the curated source catalog.
 - `catalog/tags.json`: the tag vocabulary: formats (paper, blog, forum, news) and topics.
-- `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it. Tabs live here, edited from Settings: `{"builtin": "all"|"history", "hidden"}` or custom `{"name", "tags", "hidden"}` (no tags shows everything). All is always first and History last.
+- `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it. Tabs live here, edited in onboarding step 4 and in Settings: `{"builtin": "all"|"history", "hidden"}` or custom `{"name", "tags", "sources", "hidden"}`. Each narrows the one before: the format tags, then the topic tags within those, then just the listed source ids. Leave one out and it doesn't narrow; nothing at all shows everything. All is always first and History last.
 - `data/`: the SQLite database, downloaded models and the log (gitignored).
 - `app/server.py`: routes. Every article list passes through `rank()`.
 - `app/rank.py`: the ranking seam. It currently sorts by recency.

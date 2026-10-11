@@ -160,22 +160,41 @@
   // Web fonts change row heights; re-fit once they're in.
   document.fonts?.ready.then(() => paging?.paginate());
 
-  // Settings: tabs. All and History can only be hidden; custom tabs can also be edited.
+  // Tabs (Settings and onboarding step 4). All and History can only be hidden; custom tabs can also be edited.
   // On save the rows become the "tabs" JSON in settings.json.
   const tabsEditor = document.querySelector("[data-tabs]");
   if (tabsEditor) {
     const list = tabsEditor.querySelector("[data-tab-list]");
     const addBtn = tabsEditor.querySelector("[data-add-tab]");
     const rows = () => [...list.querySelectorAll("[data-tab-row]")];
-    const tagsOf = (row) => [...row.querySelectorAll(".tag-check:checked")].map((c) => c.value);
+    // A source the formats and topics no longer offer is hidden; it doesn't count (the editor itself may be closed).
+    const picked = (row, kind) => [...row.querySelectorAll(`[data-pick="${kind}"]:checked`)].filter((c) => !c.closest("label").hidden);
+
+    // Each row narrows the one above: only sources in the picked formats and topics are offered.
+    const narrow = (row) => {
+      const formats = picked(row, "format").map((c) => c.value);
+      const topics = picked(row, "topic").map((c) => c.value);
+      let left = 0;
+      for (const box of row.querySelectorAll('[data-pick="source"]')) {
+        const fits = (!formats.length || formats.includes(box.dataset.format)) &&
+          (!topics.length || box.dataset.topics.split(" ").some((t) => topics.includes(t)));
+        box.closest("label").hidden = !fits;
+        left += fits;
+      }
+      const chosen = picked(row, "source").length;
+      row.querySelector("[data-source-count]").textContent = !left ? "none" : chosen ? `${chosen} of ${left}` : `all ${left}`;
+    };
     const update = () => {
       const custom = rows().filter((row) => !row.dataset.builtin);
       addBtn.hidden = custom.length >= Number(tabsEditor.dataset.max);
       const shown = rows().filter((row) => !row.classList.contains("is-hidden")).length;
       tabsEditor.querySelector("[data-tabs-count]").textContent = `${shown} shown`;
       for (const row of custom) {
+        narrow(row);
         row.querySelector("[data-tab-title]").textContent = row.querySelector("[data-tab-name]").value.trim() || "New tab";
-        row.querySelector("[data-tab-summary]").textContent = tagsOf(row).join(" · ") || "Everything";
+        const parts = [...picked(row, "format"), ...picked(row, "topic")].map((c) => c.value)
+          .concat(picked(row, "source").map((c) => c.closest("label").textContent.trim()));
+        row.querySelector("[data-tab-summary]").textContent = parts.join(" · ") || "Everything";
       }
     };
     const toggleEditor = (row) => {
@@ -213,7 +232,8 @@
       tabsEditor.querySelector("[name=tabs]").value = JSON.stringify(rows().map((row) => ({
         builtin: row.dataset.builtin,
         name: row.querySelector("[data-tab-name]")?.value.trim(),
-        tags: tagsOf(row),
+        tags: [...picked(row, "format"), ...picked(row, "topic")].map((c) => c.value),
+        sources: picked(row, "source").map((c) => c.value),  // only those still offered
         hidden: row.classList.contains("is-hidden"),
       })));
     });

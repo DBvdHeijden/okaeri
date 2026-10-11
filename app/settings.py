@@ -6,15 +6,15 @@ import re
 import shutil
 
 from app import ROOT
-from app.sources import FORMATS, TOPICS, known_tags
+from app.sources import BY_ID, FORMATS, TOPICS, known_sources, known_tags, tab_covers
 
 log = logging.getLogger("okaeri")
 
 PATH = ROOT / "settings.json"
 EXAMPLE = ROOT / "settings.example.json"
 MAX_TABS = 6  # custom tabs, besides All and History
-ALL_TAB = {"name": "All", "slug": "all", "tags": (), "history": False, "builtin": True}
-HISTORY_TAB = {"name": "History", "slug": "history", "tags": (), "history": True, "builtin": True}
+ALL_TAB = {"name": "All", "slug": "all", "tags": (), "sources": (), "history": False, "builtin": True}
+HISTORY_TAB = {"name": "History", "slug": "history", "tags": (), "sources": (), "history": True, "builtin": True}
 
 
 def load() -> dict:
@@ -48,6 +48,7 @@ def all_tabs() -> list[dict]:
             "name": t["name"],
             "slug": slug(t["name"]),
             "tags": known_tags(t["tags"], f"tab {t['name']!r}"),
+            "sources": known_sources(t.get("sources", []), f"tab {t['name']!r}"),
             "history": False,
             "builtin": False,
             "hidden": t.get("hidden", False),
@@ -62,7 +63,7 @@ def all_tabs() -> list[dict]:
 
 
 def tabs() -> list[dict]:
-    """The visible tabs. No tags means everything; the history tab lists opened links."""
+    """The visible tabs. Nothing picked means everything; the history tab lists opened links."""
     return [t for t in all_tabs() if not t["hidden"]] or [ALL_TAB]
 
 
@@ -83,7 +84,7 @@ def set_enabled_sources(source_ids: list[str]) -> None:
 
 
 def set_tabs(rows: list[dict]) -> None:
-    """Rows from the settings page: custom tabs need a unique name; All and History can only be hidden."""
+    """Rows from the tab editor: custom tabs need a unique name; All and History can only be hidden."""
     builtin_hidden = {row["builtin"]: bool(row.get("hidden")) for row in rows if row.get("builtin") in ("all", "history")}
     taken, custom = {"all", "history"}, []
     for row in rows:
@@ -92,7 +93,9 @@ def set_tabs(rows: list[dict]) -> None:
             continue
         taken.add(slug(name))
         tags = [t for t in row.get("tags", []) if t in FORMATS | TOPICS]
-        custom.append({"name": name, "tags": tags, "hidden": bool(row.get("hidden"))})
+        # Picked sources the formats and topics no longer leave over would narrow invisibly: drop them.
+        sources = [s for s in row.get("sources", []) if s in BY_ID and tab_covers(BY_ID[s], tags, ())]
+        custom.append({"name": name, "tags": tags, "sources": sources, "hidden": bool(row.get("hidden"))})
     settings = load()
     settings["tabs"] = [
         {"builtin": "all", "hidden": builtin_hidden.get("all", False)},

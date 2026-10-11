@@ -51,7 +51,7 @@ class Article:
     title: str
     url: str
     source: str
-    source_id: str
+    source_id: str  # the source shown; source_ids has every source the story came from
     published_at: datetime  # for History: when it was opened
     also_on: tuple[str, ...] = ()
     key: str = ""
@@ -59,3 +59,4 @@ class Article:
     score: int | None = None
     comments: int | None = None
     summary: str = field(default="", repr=False)
+    source_ids: tuple[str, ...] = ()

@@ -1,0 +1,49 @@
+{#- The tab editor, shared by Settings and onboarding step 4; import it with context.
+    Needs tabs, formats, topics and source_choices; app.js ([data-tabs]) runs it and fills the "tabs" field on submit. #}
+{% macro chip(kind, value, label, on, attrs={}) %}
+<label class="tag"><input type="checkbox" class="tag-check" data-pick="{{ kind }}" value="{{ value }}"{{ attrs | xmlattr }} {% if on %}checked{% endif %}><span>{{ label }}</span></label>
+{%- endmacro %}
+
+{% macro tab_row(t) %}
+<li class="tab-row{% if t.hidden %} is-hidden{% endif %}" data-tab-row{% if t.builtin %} data-builtin="{{ t.slug }}"{% endif %}>
+  <div class="tab-row-head">
+    <span class="tab-title" data-tab-title>{{ t.name }}</span>
+    <span class="tab-summary" data-tab-summary>
+      {%- if t.history %}Links you opened{% elif t.tags or t.sources %}{{ ((t.tags | list) + (t.sources | map("source_name") | list)) | join(" · ") }}{% else %}Everything{% endif -%}
+    </span>
+    <button type="button" class="link-btn" data-hide-tab>{{ "Show" if t.hidden else "Hide" }}</button>
+    {% if not t.builtin %}<button type="button" class="link-btn" data-edit-tab>Edit</button>{% endif %}
+  </div>
+  {% if not t.builtin %}
+  {#- Each row narrows the one above it; a row with nothing picked doesn't narrow. #}
+  <div class="tab-editor" data-tab-editor hidden>
+    <input class="tab-name" type="text" value="{{ t.name }}" placeholder="Tab name" maxlength="24"
+           aria-label="Tab name" data-tab-name>
+    <div class="tab-filter">
+      <span class="tab-filter-label">Formats</span>
+      <span class="tag-group">{% for f in formats %}{{ chip("format", f, f, f in t.tags) }}{% endfor %}</span>
+    </div>
+    <div class="tab-filter">
+      <span class="tab-filter-label">Topics</span>
+      <span class="tag-group">{% for topic in topics %}{{ chip("topic", topic, topic, topic in t.tags) }}{% endfor %}</span>
+    </div>
+    <details class="tab-sources"{% if t.sources %} open{% endif %}>
+      <summary class="tab-filter"><span class="tab-filter-label">Sources</span><span class="tab-filter-count" data-source-count></span></summary>
+      <span class="tag-group">
+        {% for s in source_choices %}{{ chip("source", s.id, s.name, s.id in t.sources, {"data-format": source_format(s), "data-topics": s.tags | join(" ")}) }}{% endfor %}
+      </span>
+    </details>
+    <button type="button" class="link-btn" data-remove-tab>Delete tab</button>
+  </div>
+  {% endif %}
+</li>
+{% endmacro %}
+
+{% macro tab_editor() %}
+<ul class="tab-list" data-tab-list>
+  {% for t in tabs %}{{ tab_row(t) }}{% endfor %}
+</ul>
+<template data-tab-template>{{ tab_row({"name": "", "tags": [], "sources": []}) }}</template>
+<button type="button" class="link-btn add-tab" data-add-tab>+ New tab</button>
+<input type="hidden" name="tabs">
+{% endmacro %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Tabs · okaeri{% endblock %}
+{% from "_tabs.html" import tab_editor with context %}
+{% block page_class %}wide{% endblock %}
+{% block content %}
+<header class="masthead">
+  <div>
+    <p class="kicker" lang="ja">はじめまして</p>
+    <h1>Arrange your tabs</h1>
+    <p class="date">Step 4 of 4 · Optional. A tab filters your feed by topic, format or source. You can change this later.</p>
+  </div>
+</header>
+
+<form method="post" action="/onboarding/tabs" data-tabs data-max="{{ max_tabs }}">
+  {#- One block: the form spaces its children apart, and the editor's parts belong together. #}
+  <div>{{ tab_editor() }}</div>
+
+  <div class="footer-bar">
+    <span data-tabs-count aria-live="polite">{{ tabs | rejectattr("hidden") | list | length }} shown</span>
+    <span class="footer-actions">
+      <a class="quiet-btn" href="/onboarding/sample">Back</a>
+      <button type="submit" class="primary-btn">Done</button>
+    </span>
+  </div>
+</form>
+{% endblock %}

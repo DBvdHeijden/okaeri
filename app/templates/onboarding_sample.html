@@ -7,7 +7,7 @@
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>What would you read?</h1>
-    <p class="date">Step 3 of 3 · Rate a few stories, if you like. This helps rank your homepage later.</p>
+    <p class="date">Step 3 of 4 · Rate a few stories, if you like. This helps rank your homepage later.</p>
   </div>
 </header>
 
@@ -35,7 +35,7 @@
   <a class="quiet-btn" href="/onboarding/sample">Show others</a>
   <span class="footer-actions">
     <a class="quiet-btn" href="/onboarding/sources">Back</a>
-    <a class="primary-btn" href="/">Done</a>
+    <a class="primary-btn" href="/onboarding/tabs">Next</a>
   </span>
 </div>
 {% else %}
@@ -44,7 +44,7 @@
   <span></span>
   <span class="footer-actions">
     <a class="quiet-btn" href="/onboarding/sources">Back</a>
-    {% if pending %}<a class="quiet-btn" href="/">Skip</a>{% else %}<a class="primary-btn" href="/">Done</a>{% endif %}
+    {% if pending %}<a class="quiet-btn" href="/onboarding/tabs">Skip</a>{% else %}<a class="primary-btn" href="/onboarding/tabs">Next</a>{% endif %}
   </span>
 </div>
 {% endif %}
