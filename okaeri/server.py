@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from okaeri.fetch import Refresher
-from okaeri.models import KINDS
+from okaeri.models import KIND_LABELS, KINDS
 from okaeri.rank import rank
 from okaeri.sources import BY_ID, SOURCES
 from okaeri.store import Store, default_path, open_store
@@ -23,8 +23,7 @@ log = logging.getLogger("okaeri")
 HERE = Path(__file__).parent
 MAX_ARTICLES = 100  # the client splits these into viewport-sized pages
 
-TABS = [("all", "All"), ("paper", "Papers"), ("blog", "Blogs"), ("forum", "Forums"), ("news", "News")]
-KIND_LABELS = {"paper": "Papers", "blog": "Blogs", "forum": "Forums", "news": "News"}
+TABS = [("all", "All"), *KIND_LABELS.items()]
 
 
 

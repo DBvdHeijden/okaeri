@@ -11,9 +11,14 @@ def test_merge_prefers_non_forum_source(store):
     assert (a.title, a.source, a.also_on, a.discussion_url) == ("Real title", "Julia Evans", ("Hacker News",), "https://hn/1")
 
 
-def test_old_items_hidden(store):
-    store.save_fetch("jvns", [item("https://jvns.ca/old", hours_ago=24 * 20)], None, None)
-    assert store.articles({"jvns": BY_ID["jvns"]}) == []
+def test_age_limit_depends_on_kind(store):
+    four_days = 24 * 4
+    store.save_fetch("nos", [item("https://nos.nl/a", hours_ago=four_days)], None, None)  # news: 3 days
+    store.save_fetch("quanta", [item("https://quantamagazine.org/a", hours_ago=four_days)], None, None)  # 14 days
+    store.save_fetch("jvns", [item("https://jvns.ca/a", hours_ago=24 * 40),  # blogs: 60 days
+                              item("https://jvns.ca/old", hours_ago=24 * 70)], None, None)
+    got = {a.url for a in store.articles({i: BY_ID[i] for i in ("nos", "quanta", "jvns")})}
+    assert got == {"https://quantamagazine.org/a", "https://jvns.ca/a"}
 
 
 def test_published_at_kept_on_refetch(store):
@@ -66,3 +71,11 @@ def test_migrates_old_schema(tmp_path):
     store.save_fetch("hn", [item("https://e.com/a", score=5, comments=2)], None, None)
     [a] = store.articles({"hn": BY_ID["hn"]})
     assert (a.score, a.comments) == (5, 2)
+
+
+def test_same_publisher_not_listed_as_also_on(store):
+    store.save_fetch("bbc-science", [item("https://bbc.com/news/a", hours_ago=2)], None, None)
+    store.save_fetch("bbc-tech", [item("https://bbc.com/news/a")], None, None)
+    store.save_fetch("hn", [item("https://bbc.com/news/a")], None, None)
+    [a] = store.articles({i: BY_ID[i] for i in ("bbc-science", "bbc-tech", "hn")})
+    assert a.also_on == ("Hacker News",)

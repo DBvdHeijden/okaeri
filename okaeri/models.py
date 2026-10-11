@@ -2,8 +2,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-Kind = Literal["paper", "blog", "forum", "news"]
-KINDS: tuple[Kind, ...] = ("paper", "blog", "forum", "news")
+Kind = Literal["paper", "blog", "forum", "scitech", "news"]
+KINDS: tuple[Kind, ...] = ("paper", "blog", "forum", "scitech", "news")
+KIND_LABELS: dict[Kind, str] = {
+    "paper": "Papers", "blog": "Blogs", "forum": "Forums", "scitech": "Sci & Tech", "news": "News",
+}
+# How long a story stays on the homepage. World news goes stale fast; blogs post rarely.
+MAX_AGE_DAYS: dict[Kind, int] = {"paper": 14, "blog": 60, "forum": 7, "scitech": 14, "news": 3}
 
 # "rss" covers RSS and Atom (feedparser handles both); the rest are JSON APIs
 # used where the RSS feed lacks points and comment counts.
@@ -19,7 +24,7 @@ class Source:
     site: str  # what we show
     description: str = ""
     fetcher: Fetcher = "rss"
-    refresh_minutes: int = 60
+    refresh_minutes: int = 30  # blogs; forums and news override, papers go slower
 
 
 @dataclass(frozen=True)

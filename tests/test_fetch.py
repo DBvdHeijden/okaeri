@@ -117,3 +117,12 @@ def test_hf_papers_counts():
              "paper": {"id": "2610.11216", "upvotes": 41}}]
     [p] = parse_hf_papers(data, now=NOW)
     assert (p.score, p.comments) == (41, 2)
+
+
+def test_skips_subscriber_only_items():
+    feed = b"""<rss version="2.0"><channel><title>LWN</title>
+    <item><title>[$] Kernel news</title><link>https://lwn.net/Articles/1/</link>
+    <pubDate>Sun, 11 Oct 2026 09:00:00 +0000</pubDate></item>
+    <item><title>Security updates</title><link>https://lwn.net/Articles/2/</link>
+    <pubDate>Sun, 11 Oct 2026 09:00:00 +0000</pubDate></item></channel></rss>"""
+    assert [i.title for i in parse_feed(feed, BY_ID["lwn"], now=NOW)] == ["Security updates"]

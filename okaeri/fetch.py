@@ -16,14 +16,14 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 import feedparser
 import httpx
 
-from okaeri.models import FetchedItem, Source
+from okaeri.models import MAX_AGE_DAYS, FetchedItem, Source
 from okaeri.store import Store
 
 log = logging.getLogger("okaeri.fetch")
 
 USER_AGENT = "okaeri/0.1 (+https://github.com/DBvdHeijden/okaeri)"
 PER_SOURCE_LIMIT = 30  # newest items kept per fetch; stops arXiv/OpenAI archives flooding
-MAX_AGE = timedelta(days=14)
+MAX_AGE = timedelta(days=max(MAX_AGE_DAYS.values()))  # per-kind limits are applied when reading
 CONCURRENCY = 8
 HOST_INTERVAL = {"export.arxiv.org": 3.0}  # arXiv API asks for >= 3s between requests
 TICK_SECONDS = 60
@@ -90,7 +90,7 @@ def parse_feed(content: bytes, source: Source, now: datetime | None = None) -> l
         if summary.lower() == "comments" or summary.startswith("Link URL:"):  # link-aggregator boilerplate
             summary = ""
         title = clean_text(entry.get("title", ""), 300) or clean_text(summary, 100)
-        if not title:
+        if not title or title.startswith("[$]"):  # LWN marks subscriber-only articles this way
             continue
         published = _to_datetime(entry.get("published_parsed") or entry.get("updated_parsed")) or now
         items.append(FetchedItem(

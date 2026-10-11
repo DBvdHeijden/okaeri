@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from functools import cache
 from pathlib import Path
 
-from okaeri.models import KINDS, Article, FetchedItem, Source
+from okaeri.models import KINDS, MAX_AGE_DAYS, Article, FetchedItem, Source
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -46,8 +46,13 @@ MIGRATIONS = {"items": {"score": "INTEGER", "comments": "INTEGER"}}
 
 # When the same story comes from several sources, the first kind here is shown;
 # the others become "also on". Forums last: they mostly link to someone else's post.
-PRIMARY_ORDER = {kind: i for i, kind in enumerate(("paper", "blog", "news", "forum"))}
+PRIMARY_ORDER = {kind: i for i, kind in enumerate(("paper", "blog", "scitech", "news", "forum"))}
 assert set(PRIMARY_ORDER) == set(KINDS)
+
+
+def _same_publisher(a: str, b: str) -> bool:
+    """BBC Science / BBC World, NOS Tech / NOS Nieuws, arXiv cs.LG / arXiv cs.AI."""
+    return a.split()[0] == b.split()[0]
 
 
 def default_path() -> Path:
@@ -169,18 +174,23 @@ class Store:
                 (source_id, now, error[:500]),
             )
 
-    def prune(self, max_age_days: int = 30) -> None:
+    def prune(self, max_age_days: int = max(MAX_AGE_DAYS.values()) + 30) -> None:
         cutoff = _iso(datetime.now(UTC) - timedelta(days=max_age_days))
         with self._conn() as db:
             db.execute("DELETE FROM items WHERE published_at < ?", (cutoff,))
 
     # Reading
 
-    def articles(self, sources: dict[str, Source], max_age_days: int = 14) -> list[Article]:
-        """Stories from the given sources, merged across sources by key. Unranked."""
+    def articles(self, sources: dict[str, Source]) -> list[Article]:
+        """Stories from the given sources, merged across sources by key. Unranked.
+
+        Each source's items are limited to its kind's MAX_AGE_DAYS.
+        """
         if not sources:
             return []
-        cutoff = _iso(datetime.now(UTC) - timedelta(days=max_age_days))
+        now = datetime.now(UTC)
+        cutoffs = {i: _iso(now - timedelta(days=MAX_AGE_DAYS[s.kind])) for i, s in sources.items()}
+        cutoff = min(cutoffs.values())
         marks = ",".join("?" * len(sources))
         with self._conn() as db:
             rows = db.execute(
@@ -194,14 +204,18 @@ class Store:
 
         groups: dict[str, list[tuple]] = {}
         for row in rows:
-            groups.setdefault(row[1], []).append(row)
+            if row[6] >= cutoffs[row[0]]:
+                groups.setdefault(row[1], []).append(row)
 
         articles = []
         for key, group in groups.items():
             group.sort(key=lambda r: (PRIMARY_ORDER[sources[r[0]].kind], r[6]))
             source_id, _, url, title, summary, discussion_url, published_at, score, comments = group[0]
             primary = sources[source_id]
-            also_on = tuple(dict.fromkeys(sources[r[0]].name for r in group[1:] if r[0] != source_id))
+            also_on = tuple(dict.fromkeys(
+                sources[r[0]].name for r in group[1:]
+                if not _same_publisher(sources[r[0]].name, primary.name)
+            ))
             # Counts and the discussion link come from the busiest discussion of the story.
             counted = [r for r in group if r[7] is not None or r[8] is not None]
             if counted:
