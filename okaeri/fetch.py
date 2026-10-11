@@ -9,6 +9,7 @@ import html
 import logging
 import re
 from collections import defaultdict
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from time import struct_time
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
@@ -62,8 +63,14 @@ def _to_datetime(t: struct_time | None) -> datetime | None:
     return datetime(*t[:6], tzinfo=UTC) if t else None  # feedparser normalises to UTC
 
 
+def is_http(url: str | None) -> bool:
+    return bool(url) and urlsplit(url).scheme in ("http", "https")
+
+
 def _keep_recent(items: list[FetchedItem], now: datetime) -> list[FetchedItem]:
-    items = [i for i in items if i.published_at >= now - MAX_AGE]
+    # Feed links end up in href, so anything but http(s) (javascript:, data:) is dropped.
+    items = [i for i in items if is_http(i.url) and i.published_at >= now - MAX_AGE]
+    items = [i if is_http(i.discussion_url) else replace(i, discussion_url=None) for i in items]
     items.sort(key=lambda i: i.published_at, reverse=True)
     return items[:PER_SOURCE_LIMIT]
 
