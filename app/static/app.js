@@ -35,6 +35,99 @@
     row.querySelector(hiding ? "[data-undo] button" : "[data-hide] button").focus();
   });
 
+  // Feed paging: split rows into pages that fit the viewport, so the page never
+  // scrolls. Arrow buttons (and ←/→ keys) cycle through them, wrapping around.
+  let paging = null;
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const LEAVE_MS = 120;
+
+  function initPaging() {
+    const feed = document.querySelector(".feed");
+    const pager = document.querySelector("[data-pager]");
+    if (!feed || !pager) return;
+    const rows = [...feed.querySelectorAll(".row")];
+    const pageNum = pager.querySelector("[data-page-num]");
+    let pages = [], current = 0, moving = 0;
+
+    const show = (i, animate) => {
+      current = (i + pages.length) % pages.length;
+      const on = new Set(pages[current]);
+      for (const row of rows) {
+        row.toggleAttribute("data-off", !on.has(row));
+        // A plain re-fit (resize, fonts loaded) lets running entrances finish.
+        if (animate || !on.has(row)) row.classList.remove("entering", "leaving");
+      }
+      if (animate && !REDUCED) {
+        void feed.offsetWidth; // restart the animation on rows that were already visible
+        pages[current].forEach((row, n) => {
+          row.style.setProperty("--i", n);
+          row.classList.add("entering");
+        });
+      }
+      pageNum.textContent = current + 1;
+      pageNum.setAttribute("aria-label", `Page ${current + 1} of ${pages.length}`);
+      pager.hidden = pages.length < 2;
+    };
+
+    // Rows leave quickly, then the next page loads in top to bottom.
+    const move = async (d) => {
+      const token = ++moving;
+      if (!REDUCED) {
+        for (const row of pages[current]) {
+          row.classList.remove("entering");
+          row.classList.add("leaving");
+        }
+        await new Promise((r) => setTimeout(r, LEAVE_MS));
+        if (token !== moving) return;
+      }
+      show(current + d, true);
+    };
+
+    const paginate = (animate = false) => {
+      const anchor = pages[current]?.[0];
+      for (const row of rows) row.removeAttribute("data-off");
+      pager.hidden = false;
+      const padBottom = parseFloat(getComputedStyle(document.querySelector(".page")).paddingBottom);
+      const pagerSpace = pager.offsetHeight + parseFloat(getComputedStyle(pager).marginTop);
+      const available = innerHeight - feed.getBoundingClientRect().top - pagerSpace - padBottom - 1;
+
+      pages = [];
+      let page = [], used = 0;
+      for (const row of rows) {
+        const h = row.offsetHeight;
+        if (page.length && used + h > available) { pages.push(page); page = []; used = 0; }
+        page.push(row); used += h;
+      }
+      if (page.length) pages.push(page);
+
+      const keep = pages.findIndex((p) => p.includes(anchor));
+      show(keep < 0 ? 0 : keep, animate);
+      feed.dataset.paged = "";
+    };
+
+    paging = { pager, paginate, move };
+    paginate(true);
+  }
+
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-prev]")) paging?.move(-1);
+    else if (e.target.closest("[data-next]")) paging?.move(1);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (!paging || paging.pager.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target.closest("input, textarea, select, [contenteditable]")) return;
+    if (e.key === "ArrowLeft") paging.move(-1);
+    else if (e.key === "ArrowRight") paging.move(1);
+  });
+  let resizeTimer;
+  addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => paging?.paginate(), 100);
+  });
+  initPaging();
+  // Web fonts change row heights; re-fit once they're in.
+  document.fonts?.ready.then(() => paging?.paginate());
+
   // Onboarding
   const form = document.querySelector("[data-onboarding]");
   if (form) {

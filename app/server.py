@@ -22,7 +22,7 @@ from app.store import Store, default_path, open_store
 log = logging.getLogger("okaeri")
 
 HERE = Path(__file__).parent
-PAGE_SIZE = 30
+PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 
 TABS = [("all", "All"), *KIND_LABELS.items()]
 HISTORY = ("history", "History")  # always the last tab, aligned right

@@ -233,12 +233,32 @@ h1 {
 }
 .link-btn:hover { text-decoration: underline; }
 
+/* JS fits the feed to the viewport (see app.js); hold it back until then so it doesn't flash.
+   Without JS the list scrolls and "Show more" links to the next ?n=. */
+@media (scripting: enabled) { .feed:not([data-paged]) { visibility: hidden; } }
+.feed[data-paged] ~ [data-more] { display: none; }
+
+/* Rows load in top to bottom (--i is the row's position on the page, set by app.js). */
+.row.entering { animation: row-in 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 25ms); }
+.row.leaving { animation: row-out 120ms ease-in both; }
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes row-out { to { opacity: 0; transform: translateY(-3px); } }
+.row[data-off] { display: none; }
+
 .pager {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   margin-top: 8px;
+}
+.pager[hidden] { display: none; }
+
+.page-num {
+  min-width: 2ch;
+  text-align: center;
+  font: 400 13px/1 var(--mono);
+  color: var(--muted);
 }
 
 .empty { color: var(--muted); padding: 24px 0; }
@@ -413,4 +433,5 @@ h1 {
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
+  .row.entering, .row.leaving { animation: none; }
 }
