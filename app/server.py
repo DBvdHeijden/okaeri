@@ -97,7 +97,7 @@ def home(request: Request, kind: str = "all"):
     if kind not in kinds and kind != "history":
         kind = "all"
     if kind == "history":
-        ranked = store().history()  # chronological by design; not a recommendation, so not ranked
+        ranked = store().history(BY_ID)  # chronological by design; not a recommendation, so not ranked
     else:
         pool = [a for a in store().articles(selected) if kind == "all" or a.kind == kind]
         ranked = rank(pool)
@@ -115,15 +115,8 @@ def home(request: Request, kind: str = "all"):
 
 
 @app.post("/api/clicks", status_code=204)
-def record_click(
-    key: Annotated[str, Form()],
-    url: Annotated[str, Form()],
-    title: Annotated[str, Form()],
-    source: Annotated[str, Form()],
-    kind: Annotated[str, Form()],
-):
-    if kind in KINDS:
-        store().record_click(key, url, title[:300], source[:100], kind)
+def record_click(key: Annotated[str, Form()]):
+    store().add_event("click", key)
 
 
 @app.get("/favicon.ico", include_in_schema=False)

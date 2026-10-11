@@ -1,6 +1,7 @@
-"""SQLite storage: fetched items, per-feed HTTP cache state, and clicks."""
+"""SQLite storage: fetched items, per-feed HTTP cache state, and user events."""
 
 import hashlib
+from dataclasses import replace
 import os
 import sqlite3
 from collections.abc import Iterable, Iterator
@@ -40,18 +41,14 @@ CREATE TABLE IF NOT EXISTS feeds (
 -- The selection moved to settings.json.
 DROP TABLE IF EXISTS selected_sources;
 
--- Stories the user opened. A snapshot, so History outlives pruned items;
--- also the interest signal for ranking later.
-CREATE TABLE IF NOT EXISTS clicks (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    key        TEXT NOT NULL,
-    url        TEXT NOT NULL,
-    title      TEXT NOT NULL,
-    source     TEXT NOT NULL,
-    kind       TEXT NOT NULL,
-    clicked_at TEXT NOT NULL
+-- Everything the user did, by story key: the History tab and the signal for ranking.
+CREATE TABLE IF NOT EXISTS events (
+    id   INTEGER PRIMARY KEY,
+    type TEXT NOT NULL CHECK (type IN ('seed', 'click', 'hide', 'unhide')),
+    key  TEXT NOT NULL,
+    at   TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS clicks_clicked_at ON clicks (clicked_at);
+CREATE INDEX IF NOT EXISTS events_key ON events (key);
 """
 
 # Columns added after the first release; added in place to existing databases.
@@ -90,6 +87,9 @@ class Store:
                 for name, decl in columns.items():
                     if name not in have:
                         db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name = 'clicks'").fetchone():
+                db.execute("INSERT INTO events (type, key, at) SELECT 'click', key, clicked_at FROM clicks ORDER BY id")
+                db.execute("DROP TABLE clicks")
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -178,34 +178,40 @@ class Store:
     def prune(self, max_age_days: int = max(MAX_AGE_DAYS.values()) + 30) -> None:
         cutoff = _iso(datetime.now(UTC) - timedelta(days=max_age_days))
         with self._conn() as db:
-            db.execute("DELETE FROM items WHERE published_at < ?", (cutoff,))
+            db.execute("DELETE FROM items WHERE published_at < ? AND key NOT IN (SELECT key FROM events)", (cutoff,))
 
-    # Clicks / History
+    # Events / History
 
-    def record_click(self, key: str, url: str, title: str, source: str, kind: str) -> None:
+    def add_event(self, type: str, key: str) -> None:
         with self._conn() as db:
-            db.execute(
-                "INSERT INTO clicks (key, url, title, source, kind, clicked_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (key, url, title, source, kind, _iso(datetime.now(UTC))),
-            )
+            db.execute("INSERT INTO events (type, key, at) VALUES (?, ?, ?)", (type, key, _iso(datetime.now(UTC))))
 
-    def history(self, limit: int = 100) -> list[Article]:
-        """Opened stories, most recently opened first; each story once."""
+    def history(self, sources: dict[str, Source], limit: int = 100) -> list[Article]:
+        """Opened stories, most recently opened first; each story once.
+
+        published_at is when the story was last opened.
+        """
         with self._conn() as db:
-            rows = db.execute(
-                """
-                SELECT key, url, title, source, kind, max(clicked_at) AS last FROM clicks
-                GROUP BY key ORDER BY last DESC LIMIT ?
-                """,
+            opened = dict(db.execute(
+                "SELECT key, max(at) AS last FROM events WHERE type = 'click' GROUP BY key ORDER BY last DESC LIMIT ?",
                 (limit,),
+            ).fetchall())
+            keys = ",".join("?" * len(opened))
+            rows = db.execute(
+                f"""
+                SELECT source_id, key, url, title, summary, discussion_url, published_at, score, comments
+                FROM items WHERE key IN ({keys})
+                """,
+                list(opened),
             ).fetchall()
+        groups: dict[str, list[tuple]] = {}
+        for row in rows:
+            if row[0] in sources:
+                groups.setdefault(row[1], []).append(row)
+        by_key = {a.key: a for a in _merge(groups, sources)}
         return [
-            Article(
-                id=hashlib.sha1(key.encode()).hexdigest()[:12],
-                key=key, url=url, title=title, source=source, kind=kind,
-                published_at=datetime.fromisoformat(last),
-            )
-            for key, url, title, source, kind, last in rows
+            replace(by_key[key], published_at=datetime.fromisoformat(last))
+            for key, last in opened.items() if key in by_key
         ]
 
     # Reading
@@ -235,39 +241,43 @@ class Store:
         for row in rows:
             if row[6] >= cutoffs[row[0]]:
                 groups.setdefault(row[1], []).append(row)
+        return _merge(groups, sources)
 
-        articles = []
-        for key, group in groups.items():
-            group.sort(key=lambda r: (PRIMARY_ORDER[sources[r[0]].kind], r[6]))
-            source_id, _, url, title, summary, discussion_url, published_at, score, comments = group[0]
-            primary = sources[source_id]
-            also_on = tuple(dict.fromkeys(
-                sources[r[0]].name for r in group[1:]
-                if not _same_publisher(sources[r[0]].name, primary.name)
-            ))
-            # Counts and the discussion link come from the busiest discussion of the story.
-            counted = [r for r in group if r[7] is not None or r[8] is not None]
-            if counted:
-                busiest = max(counted, key=lambda r: ((r[8] or 0), (r[7] or 0)))
-                score, comments = busiest[7], busiest[8]
-                discussion_url = busiest[5] or discussion_url
-            if not discussion_url:
-                discussion_url = next((r[5] for r in group if r[5]), None)
-            articles.append(Article(
-                id=hashlib.sha1(key.encode()).hexdigest()[:12],
-                key=key,
-                title=title,
-                url=url,
-                source=primary.name,
-                kind=primary.kind,
-                published_at=datetime.fromisoformat(published_at),
-                also_on=also_on,
-                discussion_url=discussion_url,
-                score=score,
-                comments=comments,
-                summary=summary,
-            ))
-        return articles
+
+def _merge(groups: dict[str, list[tuple]], sources: dict[str, Source]) -> list[Article]:
+    """One Article per key from its item rows across sources."""
+    articles = []
+    for key, group in groups.items():
+        group.sort(key=lambda r: (PRIMARY_ORDER[sources[r[0]].kind], r[6]))
+        source_id, _, url, title, summary, discussion_url, published_at, score, comments = group[0]
+        primary = sources[source_id]
+        also_on = tuple(dict.fromkeys(
+            sources[r[0]].name for r in group[1:]
+            if not _same_publisher(sources[r[0]].name, primary.name)
+        ))
+        # Counts and the discussion link come from the busiest discussion of the story.
+        counted = [r for r in group if r[7] is not None or r[8] is not None]
+        if counted:
+            busiest = max(counted, key=lambda r: ((r[8] or 0), (r[7] or 0)))
+            score, comments = busiest[7], busiest[8]
+            discussion_url = busiest[5] or discussion_url
+        if not discussion_url:
+            discussion_url = next((r[5] for r in group if r[5]), None)
+        articles.append(Article(
+            id=hashlib.sha1(key.encode()).hexdigest()[:12],
+            key=key,
+            title=title,
+            url=url,
+            source=primary.name,
+            kind=primary.kind,
+            published_at=datetime.fromisoformat(published_at),
+            also_on=also_on,
+            discussion_url=discussion_url,
+            score=score,
+            comments=comments,
+            summary=summary,
+        ))
+    return articles
 
 
 @cache

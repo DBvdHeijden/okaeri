@@ -113,18 +113,18 @@ def test_single_kind_shows_only_all_and_history(store):
     assert tab_labels(client.get("/").text) == ["All", "History"]
 
 
-def open_story(key, url, title, source="Hacker News", kind="forum"):
-    r = client.post("/api/clicks", data={"key": key, "url": url, "title": title, "source": source, "kind": kind})
+def open_story(key):
+    r = client.post("/api/clicks", data={"key": key})
     assert r.status_code == 204
 
 
 def test_history_lists_opened_stories_latest_first(store):
     seed(store)
-    open_story("a", "https://e.com/a", "First opened")
-    open_story("b", "https://e.com/b", "Second opened")
-    open_story("a", "https://e.com/a", "First opened")  # reopened: moves to top, listed once
+    open_story("example.com/news")
+    open_story("simonwillison.net/a")
+    open_story("example.com/news")  # reopened: moves to top, listed once
     html = client.get("/?kind=history").text
-    assert titles(html) == ["First opened", "Second opened"]
+    assert titles(html) == ["Forum link", "Blog post"]
     assert ">just now</time>" in html and " ago" not in html and "data-hide" not in html
 
 
@@ -133,7 +133,7 @@ def test_history_empty_state(store):
     assert "Nothing opened yet." in client.get("/?kind=history").text
 
 
-def test_click_with_unknown_kind_ignored(store):
+def test_click_on_unknown_story_not_in_history(store):
     seed(store)
-    open_story("x", "https://e.com/x", "Bogus", kind="nope")
+    open_story("e.com/unknown")
     assert titles(client.get("/?kind=history").text) == []

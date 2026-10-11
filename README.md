@@ -40,5 +40,5 @@ uv run scripts/make_favicon.py
 - `app/sources.py`: loads the catalog.
 - `app/fetch.py`: feed parsing (RSS/Atom, HF papers), conditional GET, and the background refresher.
 - `app/settings.py`: reads and writes `settings.json`.
-- `app/store.py`: SQLite: items, per-feed cache headers, and clicks.
+- `app/store.py`: SQLite: items, per-feed cache headers, and user events (click, hide, …).
 - `app/templates/`, `app/static/`: server-rendered HTML, CSS, and a little vanilla JS.
