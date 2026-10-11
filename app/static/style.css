@@ -70,6 +70,13 @@ button { font: inherit; color: inherit; }
 
 /* Onboarding uses the full width, in columns, so each step fits on fewer screens. */
 .page.wide { max-width: 1040px; }
+/* The footer sits at the bottom of the window on every step, short or long, so Next doesn't move.
+   No bottom padding: a short page then puts it exactly where sticky holds it on a long one. */
+.page.wide { display: flex; flex-direction: column; min-height: 100vh; padding-bottom: 0; }
+.page.wide > form { flex: 1; display: flex; flex-direction: column; gap: 40px; }
+.page.wide .footer-bar { margin-top: auto; }
+.page.wide .footer-bar .primary-btn { min-width: 104px; justify-content: center; }  /* Next and Done: same size, so Back stays put */
+.rate-list { margin-bottom: 40px; }
 .columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
