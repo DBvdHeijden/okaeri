@@ -204,7 +204,7 @@ def parse_lw_graphql(data: dict, now: datetime | None = None) -> list[FetchedIte
 
 
 async def fetch_source(client: httpx.AsyncClient, source: Source, store: Store) -> None:
-    etag, last_modified = store.cache_headers(source.id)
+    etag, last_modified = await asyncio.to_thread(store.cache_headers, source.id)
     headers = {}
     if etag:
         headers["If-None-Match"] = etag
@@ -215,6 +215,11 @@ async def fetch_source(client: httpx.AsyncClient, source: Source, store: Store) 
         resp = await client.post(source.url, json={"query": LW_QUERY})
     else:
         resp = await client.get(source.url, headers=headers)
+    # Parsing and SQLite writes are blocking; keep them off the event loop that serves pages.
+    await asyncio.to_thread(save_response, store, source, resp, etag, last_modified)
+
+
+def save_response(store: Store, source: Source, resp: httpx.Response, etag: str | None, last_modified: str | None) -> None:
     if resp.status_code == 304:
         store.save_fetch(source.id, None, etag, last_modified)
         return
@@ -252,7 +257,7 @@ async def refresh(store: Store, sources: list[Source]) -> None:
                     await fetch_source(client, source, store)
                 except Exception as exc:  # noqa: BLE001 — a bad feed must not stop the rest
                     log.warning("failed to fetch %s: %s", source.id, exc)
-                    store.save_error(source.id, f"{type(exc).__name__}: {exc}")
+                    await asyncio.to_thread(store.save_error, source.id, f"{type(exc).__name__}: {exc}")
 
     async with httpx.AsyncClient(
         headers={"User-Agent": USER_AGENT},
@@ -260,7 +265,7 @@ async def refresh(store: Store, sources: list[Source]) -> None:
         follow_redirects=True,
     ) as client:
         await asyncio.gather(*(run_host(client, h, q) for h, q in by_host.items()))
-    store.prune()
+    await asyncio.to_thread(store.prune)
 
 
 class Refresher:
@@ -275,8 +280,10 @@ class Refresher:
         while True:
             try:
                 selected = [self.catalogue[i] for i in settings.enabled_sources() if i in self.catalogue]
-                if due := self.store.due(selected):
+                if due := await asyncio.to_thread(self.store.due, selected):
                     await refresh(self.store, due)
+                    # Embed step goes here, once new items are stored:
+                    # await asyncio.to_thread(embed_new, self.store)
             except Exception:
                 log.exception("refresh cycle failed")
             try:
