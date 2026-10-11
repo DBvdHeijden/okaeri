@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Sources · okaeri{% endblock %}
+{% block content %}
+<div class="top-actions">
+  <a class="icon-btn" href="/" aria-label="Back to home">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+  </a>
+</div>
+<header class="masthead">
+  <div>
+    <p class="kicker" lang="ja">はじめまして</p>
+    <h1>Pick your sources</h1>
+    <p class="date">Choose what shows up on your homepage. You can change this later.</p>
+  </div>
+</header>
+
+<section class="imports" aria-label="Import sources">
+  <button type="button" class="chip-btn" data-not-yet>Import glance.yml</button>
+  <button type="button" class="chip-btn" data-not-yet>Import OPML</button>
+  <button type="button" class="chip-btn" data-not-yet>Add URL</button>
+  <p class="notice" role="status" aria-live="polite" data-notice></p>
+</section>
+
+<label class="search">
+  <span class="visually-hidden">Search sources</span>
+  <input type="search" placeholder="Search sources" autocomplete="off" data-source-search>
+</label>
+
+<form method="post" action="/onboarding" data-onboarding>
+  {% for label, sources in groups %}
+  <fieldset class="group" data-group>
+    <legend>{{ label }}</legend>
+    <div class="cards">
+      {% for s in sources %}
+      <label class="card" data-name="{{ s.name | lower }}">
+        <input type="checkbox" name="sources" value="{{ s.id }}">
+        <span class="card-name">{{ s.name }}</span>
+        <span class="card-url">{{ s.url | replace("https://", "") | replace("www.", "") | truncate(32, true, "…") }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  {% endfor %}
+  <p class="empty" hidden data-no-results>No sources match.</p>
+
+  <div class="footer-bar">
+    <span data-selected-count aria-live="polite">0 selected</span>
+    <button type="submit" class="primary-btn">Continue</button>
+  </div>
+</form>
+{% endblock %}
