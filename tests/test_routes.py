@@ -11,7 +11,7 @@ client = TestClient(server.app)
 
 
 def titles(html: str) -> list[str]:
-    return re.findall(r'class="title" href="[^"]*" rel="noopener">([^<]+)<', html)
+    return re.findall(r'class="title" href="[^"]*" target="_blank" rel="noopener">([^<]+)<', html)
 
 
 def seed(store):
@@ -94,7 +94,7 @@ def test_counts_shown_with_comment_link(store):
                                  discussion_url="https://news.ycombinator.com/item?id=9")], None, None)
     html = client.get("/").text
     assert "1,516 points" in html
-    assert '<a href="https://news.ycombinator.com/item?id=9" rel="noopener">1 comment</a>' in html
+    assert '<a href="https://news.ycombinator.com/item?id=9" target="_blank" rel="noopener">1 comment</a>' in html
 
 
 def tab_labels(html: str) -> list[str]:
@@ -104,10 +104,36 @@ def tab_labels(html: str) -> list[str]:
 def test_tabs_only_for_followed_kinds(store):
     seed(store)  # blog, forum, paper
     html = client.get("/").text
-    assert tab_labels(html) == ["All", "Papers", "Blogs", "Forums"]
+    assert tab_labels(html) == ["All", "Papers", "Blogs", "Forums", "History"]
     assert titles(client.get("/?kind=news").text) == titles(html)  # unfollowed kind falls back to all
 
 
-def test_no_tabs_for_single_kind(store):
+def test_single_kind_shows_only_all_and_history(store):
     store.set_selected(["simonw", "jvns"])
-    assert tab_labels(client.get("/").text) == []
+    assert tab_labels(client.get("/").text) == ["All", "History"]
+
+
+def open_story(key, url, title, source="Hacker News", kind="forum"):
+    r = client.post("/api/clicks", data={"key": key, "url": url, "title": title, "source": source, "kind": kind})
+    assert r.status_code == 204
+
+
+def test_history_lists_opened_stories_latest_first(store):
+    seed(store)
+    open_story("a", "https://e.com/a", "First opened")
+    open_story("b", "https://e.com/b", "Second opened")
+    open_story("a", "https://e.com/a", "First opened")  # reopened: moves to top, listed once
+    html = client.get("/?kind=history").text
+    assert titles(html) == ["First opened", "Second opened"]
+    assert ">just now</time>" in html and " ago" not in html and "data-hide" not in html
+
+
+def test_history_empty_state(store):
+    seed(store)
+    assert "Nothing opened yet." in client.get("/?kind=history").text
+
+
+def test_click_with_unknown_kind_ignored(store):
+    seed(store)
+    open_story("x", "https://e.com/x", "Bogus", kind="nope")
+    assert titles(client.get("/?kind=history").text) == []

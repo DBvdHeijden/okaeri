@@ -39,6 +39,19 @@ CREATE TABLE IF NOT EXISTS feeds (
 CREATE TABLE IF NOT EXISTS selected_sources (
     source_id TEXT PRIMARY KEY
 );
+
+-- Stories the user opened. A snapshot, so History outlives pruned items;
+-- also the interest signal for ranking later.
+CREATE TABLE IF NOT EXISTS clicks (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    key        TEXT NOT NULL,
+    url        TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    source     TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    clicked_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS clicks_clicked_at ON clicks (clicked_at);
 """
 
 # Columns added after the first release; added in place to existing databases.
@@ -179,6 +192,34 @@ class Store:
         with self._conn() as db:
             db.execute("DELETE FROM items WHERE published_at < ?", (cutoff,))
 
+    # Clicks / History
+
+    def record_click(self, key: str, url: str, title: str, source: str, kind: str) -> None:
+        with self._conn() as db:
+            db.execute(
+                "INSERT INTO clicks (key, url, title, source, kind, clicked_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (key, url, title, source, kind, _iso(datetime.now(UTC))),
+            )
+
+    def history(self, limit: int = 100) -> list[Article]:
+        """Opened stories, most recently opened first; each story once."""
+        with self._conn() as db:
+            rows = db.execute(
+                """
+                SELECT key, url, title, source, kind, max(clicked_at) AS last FROM clicks
+                GROUP BY key ORDER BY last DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [
+            Article(
+                id=hashlib.sha1(key.encode()).hexdigest()[:12],
+                key=key, url=url, title=title, source=source, kind=kind,
+                published_at=datetime.fromisoformat(last),
+            )
+            for key, url, title, source, kind, last in rows
+        ]
+
     # Reading
 
     def articles(self, sources: dict[str, Source]) -> list[Article]:
@@ -226,6 +267,7 @@ class Store:
                 discussion_url = next((r[5] for r in group if r[5]), None)
             articles.append(Article(
                 id=hashlib.sha1(key.encode()).hexdigest()[:12],
+                key=key,
                 title=title,
                 url=url,
                 source=primary.name,

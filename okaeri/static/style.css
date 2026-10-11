@@ -159,7 +159,9 @@ h1 {
   font-size: 15px;
 }
 .tabs a:hover { color: var(--text); background: var(--chip); }
-.tabs a[aria-current="page"] { color: var(--text); background: var(--chip); font-weight: 500; }
+.tabs a[aria-current="page"] { color: var(--text); font-weight: 500; }
+.tabs a[aria-current="page"]:hover { background: none; }
+.tabs a[data-tab="history"] { margin-left: auto; }
 
 /* Feed */
 
@@ -231,6 +233,17 @@ h1 {
 .link-btn:hover { text-decoration: underline; }
 
 .js .feed:not([data-paged]) { visibility: hidden; }
+
+/* Rows load in top to bottom (--i is the row's position on the page, set by app.js). */
+.row.entering { animation: row-in 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 25ms); }
+.row.leaving { animation: row-out 120ms ease-in both; }
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes row-out { to { opacity: 0; transform: translateY(-3px); } }
+
+/* Tab switches: the old list fades out, the new rows then load in as above. */
+.feed-region { transition: opacity 120ms ease-in; }
+.feed-region.is-fading { opacity: 0; }
+.feed-region:not(.is-fading) { transition-duration: 0ms; }
 .row[data-off] { display: none; }
 
 .pager {
@@ -421,4 +434,5 @@ h1 {
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
+  .row.entering, .row.leaving { animation: none; }
 }

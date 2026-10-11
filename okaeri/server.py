@@ -24,6 +24,7 @@ HERE = Path(__file__).parent
 MAX_ARTICLES = 100  # the client splits these into viewport-sized pages
 
 TABS = [("all", "All"), *KIND_LABELS.items()]
+HISTORY = ("history", "History")  # always the last tab, aligned right
 
 
 
@@ -75,11 +76,15 @@ def home(request: Request, kind: str = "all"):
     kinds = {s.kind for s in selected.values()}
     tabs = [(value, label) for value, label in TABS if value == "all" or value in kinds]
     if len(tabs) <= 2:
-        tabs = []
-    if kind not in kinds:
+        tabs = tabs[:1]
+    tabs.append(HISTORY)
+    if kind not in kinds and kind != "history":
         kind = "all"
-    pool = [a for a in store().articles(selected) if kind == "all" or a.kind == kind]
-    ranked = rank(pool)
+    if kind == "history":
+        ranked = store().history()  # chronological by design; not a recommendation, so not ranked
+    else:
+        pool = [a for a in store().articles(selected) if kind == "all" or a.kind == kind]
+        ranked = rank(pool)
     return templates.TemplateResponse(
         request,
         "home.html",
@@ -91,6 +96,18 @@ def home(request: Request, kind: str = "all"):
             "today": datetime.now().strftime("%A, %-d %B"),
         },
     )
+
+
+@app.post("/api/clicks", status_code=204)
+def record_click(
+    key: Annotated[str, Form()],
+    url: Annotated[str, Form()],
+    title: Annotated[str, Form()],
+    source: Annotated[str, Form()],
+    kind: Annotated[str, Form()],
+):
+    if kind in KINDS:
+        store().record_click(key, url, title[:300], source[:100], kind)
 
 
 @app.get("/favicon.ico", include_in_schema=False)

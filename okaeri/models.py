@@ -50,8 +50,9 @@ class Article:
     url: str
     source: str
     kind: Kind
-    published_at: datetime
+    published_at: datetime  # for History: when it was opened
     also_on: tuple[str, ...] = ()
+    key: str = ""
     discussion_url: str | None = None
     score: int | None = None
     comments: int | None = None

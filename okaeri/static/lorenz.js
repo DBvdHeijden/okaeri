@@ -39,8 +39,35 @@
     count = Math.min(count + 1, TRAIL);
   }
 
-  // Skip the transient so the particle starts on the attractor.
-  for (let i = 0; i < 3000; i++) step();
+  // Persist across page loads (tab switches) so the figure continues instead of restarting.
+  // The trail is stored as raw Float32 bytes in base64 to keep it small and fast.
+  const STORE_KEY = "okaeri.lorenz";
+  function save() {
+    try {
+      const all = new Float32Array(TRAIL * 3);
+      all.set(xs, 0); all.set(ys, TRAIL); all.set(zs, 2 * TRAIL);
+      const bytes = new Uint8Array(all.buffer);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      sessionStorage.setItem(STORE_KEY, JSON.stringify({ trail: TRAIL, x, y, z, head, count, angle, data: btoa(bin) }));
+    } catch (e) {}
+  }
+  function restore() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(STORE_KEY));
+      if (!saved || saved.trail !== TRAIL) return false; // trail length changed: start fresh
+      const all = new Float32Array(Uint8Array.from(atob(saved.data), (c) => c.charCodeAt(0)).buffer);
+      xs.set(all.subarray(0, TRAIL)); ys.set(all.subarray(TRAIL, 2 * TRAIL)); zs.set(all.subarray(2 * TRAIL));
+      ({ x, y, z, head, count, angle } = saved);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  addEventListener("pagehide", save);
+
+  // Otherwise skip the transient so the particle starts on the attractor.
+  if (!restore()) for (let i = 0; i < 3000; i++) step();
 
   let trailColor = "";
   function readColors() {
@@ -117,7 +144,7 @@
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reduced) {
     // Static drawing: one full trail, no animation.
-    for (let i = 0; i < TRAIL; i++) { step(); push(); }
+    if (count < TRAIL) for (let i = 0; i < TRAIL; i++) { step(); push(); }
     new ResizeObserver(draw).observe(canvas);
     draw();
     return;

@@ -48,25 +48,75 @@
     else if (e.target.closest("[data-undo]")) unhideArticle(row.dataset.id);
   });
 
+  // Record opened stories for the History tab (title or comments link, any mouse button).
+  // sendBeacon survives the page navigating away.
+  const recordOpen = (e) => {
+    const link = e.target.closest(".row-text a");
+    if (!link || (e.type === "auxclick" && e.button !== 1)) return;
+    const row = link.closest(".row");
+    const title = row.querySelector(".title");
+    const data = new FormData();
+    data.set("key", row.dataset.key);
+    data.set("url", title.href);
+    data.set("title", title.textContent.trim());
+    data.set("source", row.dataset.source);
+    data.set("kind", row.dataset.kind);
+    navigator.sendBeacon?.("/api/clicks", data);
+  };
+  document.addEventListener("click", recordOpen);
+  document.addEventListener("auxclick", recordOpen);
+
   // Feed paging: split rows into pages that fit the viewport, so the page never
   // scrolls. Arrow buttons (and ←/→ keys) cycle through them, wrapping around.
-  const feed = document.querySelector(".feed");
-  const pager = document.querySelector("[data-pager]");
-  if (feed && pager) {
+  // initPaging() runs again whenever the feed is swapped by a tab switch.
+  let paging = null;
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const LEAVE_MS = 120;
+
+  function initPaging() {
+    const feed = document.querySelector(".feed");
+    const pager = document.querySelector("[data-pager]");
+    paging = null;
+    if (!feed || !pager) return;
     const rows = [...feed.querySelectorAll(".row")];
     const pageNum = pager.querySelector("[data-page-num]");
-    let pages = [], current = 0;
+    let pages = [], current = 0, moving = 0;
 
-    const show = (i) => {
+    const show = (i, animate) => {
       current = (i + pages.length) % pages.length;
       const on = new Set(pages[current]);
-      for (const row of rows) row.toggleAttribute("data-off", !on.has(row));
+      for (const row of rows) {
+        row.toggleAttribute("data-off", !on.has(row));
+        // A plain re-fit (resize, fonts loaded) lets running entrances finish.
+        if (animate || !on.has(row)) row.classList.remove("entering", "leaving");
+      }
+      if (animate && !REDUCED) {
+        void feed.offsetWidth; // restart the animation on rows that were already visible
+        pages[current].forEach((row, n) => {
+          row.style.setProperty("--i", n);
+          row.classList.add("entering");
+        });
+      }
       pageNum.textContent = current + 1;
       pageNum.setAttribute("aria-label", `Page ${current + 1} of ${pages.length}`);
       pager.hidden = pages.length < 2;
     };
 
-    const paginate = () => {
+    // Rows leave quickly, then the next page loads in top to bottom.
+    const move = async (d) => {
+      const token = ++moving;
+      if (!REDUCED) {
+        for (const row of pages[current]) {
+          row.classList.remove("entering");
+          row.classList.add("leaving");
+        }
+        await new Promise((r) => setTimeout(r, LEAVE_MS));
+        if (token !== moving) return;
+      }
+      show(current + d, true);
+    };
+
+    const paginate = (animate = false) => {
       const anchor = pages[current]?.[0];
       for (const row of rows) row.removeAttribute("data-off");
       pager.hidden = false;
@@ -84,27 +134,79 @@
       if (page.length) pages.push(page);
 
       const keep = pages.findIndex((p) => p.includes(anchor));
-      show(keep < 0 ? 0 : keep);
+      show(keep < 0 ? 0 : keep, animate);
       feed.dataset.paged = "";
     };
 
-    pager.querySelector("[data-prev]").addEventListener("click", () => show(current - 1));
-    pager.querySelector("[data-next]").addEventListener("click", () => show(current + 1));
-    document.addEventListener("keydown", (e) => {
-      if (pager.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
-      if (e.target.closest("input, textarea, select, [contenteditable]")) return;
-      if (e.key === "ArrowLeft") show(current - 1);
-      else if (e.key === "ArrowRight") show(current + 1);
-    });
+    paging = { pager, paginate, move };
+    paginate(true);
+  }
 
-    let resizeTimer;
-    addEventListener("resize", () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(paginate, 100);
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-prev]")) paging?.move(-1);
+    else if (e.target.closest("[data-next]")) paging?.move(1);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (!paging || paging.pager.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target.closest("input, textarea, select, [contenteditable]")) return;
+    if (e.key === "ArrowLeft") paging.move(-1);
+    else if (e.key === "ArrowRight") paging.move(1);
+  });
+  let resizeTimer;
+  addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => paging?.paginate(), 100);
+  });
+  initPaging();
+  // Web fonts change row heights; re-fit once they're in.
+  document.fonts?.ready.then(() => paging?.paginate());
+
+  // Tab switching without a page load: fetch the new list, fade the old one out,
+  // swap it in and fade back in. Keeps the attractor running and avoids a flash.
+  // Any failure (or a redirect, e.g. to onboarding) falls back to normal navigation.
+  const region = document.querySelector("[data-feed-region]");
+  const tabs = document.querySelector(".tabs");
+  if (region && tabs) {
+    const FADE_MS = REDUCED ? 0 : LEAVE_MS;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let latest = 0;
+
+    const switchTo = async (url, push) => {
+      const token = ++latest;
+      region.classList.add("is-fading");
+      try {
+        const [html] = await Promise.all([
+          fetch(url).then((r) => {
+            if (!r.ok || r.redirected) throw new Error("fallback");
+            return r.text();
+          }),
+          wait(FADE_MS),
+        ]);
+        if (token !== latest) return; // a newer click won
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const next = doc.querySelector("[data-feed-region]");
+        if (!next) throw new Error("fallback");
+        region.innerHTML = next.innerHTML;
+        const currentHref = doc.querySelector('.tabs [aria-current="page"]')?.getAttribute("href");
+        for (const a of tabs.querySelectorAll("a")) {
+          if (a.getAttribute("href") === currentHref) a.setAttribute("aria-current", "page");
+          else a.removeAttribute("aria-current");
+        }
+        if (push) history.pushState(null, "", url);
+        initPaging();
+        requestAnimationFrame(() => region.classList.remove("is-fading"));
+      } catch (err) {
+        location.href = url;
+      }
+    };
+
+    tabs.addEventListener("click", (e) => {
+      const a = e.target.closest("a");
+      if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      if (a.getAttribute("aria-current") !== "page") switchTo(a.href, true);
     });
-    paginate();
-    // Web fonts change row heights; re-fit once they're in.
-    document.fonts?.ready.then(paginate);
+    addEventListener("popstate", () => switchTo(location.href, false));
   }
 
   // Onboarding
