@@ -5,10 +5,11 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlsplit
 
 import uvicorn
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -47,6 +48,21 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="okaeri", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
+
+
+def same_origin(request: Request) -> bool:
+    if site := request.headers.get("sec-fetch-site"):
+        return site in ("same-origin", "none")
+    origin = request.headers.get("origin")
+    return origin is None or urlsplit(origin).netloc == request.headers.get("host")
+
+
+@app.middleware("http")
+async def refuse_cross_site_posts(request: Request, call_next):
+    # Any website can submit a form to localhost; only our own pages may change state.
+    if request.method == "POST" and not same_origin(request):
+        return PlainTextResponse("Cross-site request refused", status_code=403)
+    return await call_next(request)
 
 
 def ago(dt: datetime) -> str:
