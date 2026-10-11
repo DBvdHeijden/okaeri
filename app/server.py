@@ -109,19 +109,18 @@ def home(request: Request, tab: str = "", n: Annotated[int, Query(ge=1)] = PAGE_
             "tabs": tabs,
             "pending": store().pending(selected),
             "today": datetime.now().strftime("%A, %-d %B"),
-            "progress": background_work(request),
         },
     )
 
 
 def background_work(request: Request) -> str:
-    """What the embedding child is doing, shown next to the date; empty when nothing runs."""
+    """What the embedding child is doing, shown in Settings; empty when nothing runs."""
     refresher = getattr(request.app.state, "refresher", None)
     if not (refresher and refresher.embedding):
         return ""
     if not model_downloaded():
-        return "downloading the language model (~330 MB, one time)…"
-    return f"indexing articles in the background: {len(pending(store())):,} to go"
+        return "downloading language model (~330 MB, one time)…"
+    return f"indexing articles: {len(pending(store())):,} to go"
 
 
 @app.get("/progress", response_class=PlainTextResponse)
@@ -190,6 +189,7 @@ def settings_page(request: Request):
             "tabs": settings.all_tabs(),
             "tag_groups": [sorted(TOPICS), list(FORMAT_GROUPS)],
             "max_tabs": settings.MAX_TABS,
+            "progress": background_work(request),
         },
     )
 

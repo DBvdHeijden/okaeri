@@ -23,12 +23,12 @@
     });
   }
 
-  // Background work (model download, indexing) next to the date: refresh the text until it's done.
+  // Background work (model download, indexing) in Settings: refresh the text until it's done.
   const progress = document.querySelector("[data-progress]");
   if (progress?.textContent) {
     const poll = setInterval(async () => {
       const text = await (await fetch("/progress")).text();
-      progress.textContent = text && ` · ${text}`;
+      progress.textContent = text;
       if (!text) clearInterval(poll);
     }, 5000);
   }

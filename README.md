@@ -19,7 +19,7 @@ uv run main.py install
 
 Then open http://localhost:12362 and pick your sources. It runs in the background and starts whenever you log in; set it as your browser's homepage.
 
-The first time, okaeri also downloads a language model (~330 MB) and indexes your articles in the background, which can take a few minutes. The feed works meanwhile; the progress shows next to the date until it's done.
+The first time, okaeri also downloads a language model (~330 MB) and indexes your articles in the background, which can take a few minutes. The feed works meanwhile; Settings (the gear) shows the progress until it's done.
 
 ## Update
 
