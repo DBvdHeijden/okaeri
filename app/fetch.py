@@ -307,11 +307,13 @@ class Refresher:
         child = await asyncio.create_subprocess_exec(sys.executable, "-m", "app.embed", cwd=ROOT)
         try:
             await asyncio.wait_for(child.wait(), EMBED_TIMEOUT_SECONDS)
+            result = "ok" if child.returncode == 0 else f"failed (exit code {child.returncode})"
         except TimeoutError:
-            log.warning("embedding took over %d minutes; stopped it", EMBED_TIMEOUT_SECONDS // 60)
+            result = f"timed out after {EMBED_TIMEOUT_SECONDS // 60} minutes"
         finally:
             if child.returncode is None:  # timed out, or the server is stopping
                 child.kill()
-        if child.returncode != 0:
-            log.warning("embedding failed; next try in %d minutes", EMBED_RETRY_SECONDS // 60)
+        await asyncio.to_thread(self.store.save_embed_run, result)
+        if result != "ok":
+            log.warning("embedding %s; next try in %d minutes", result, EMBED_RETRY_SECONDS // 60)
             self.embed_failed_at = time.monotonic()

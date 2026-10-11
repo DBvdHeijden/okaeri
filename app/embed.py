@@ -27,6 +27,7 @@ DIMS = 256  # Matryoshka: the model card calls quality near-lossless down to 256
 MODEL = f"embeddinggemma-2-text@{DIMS}"  # stored with each vector, so a new model or size re-embeds everything
 BATCH = 16  # faster than 32 and ~600 MB less peak RAM, measured on 200 feed items
 SUMMARY_CHARS = 500
+MODEL_DIR = ROOT / "data" / "models" / "embeddinggemma-2"
 MAX_TOKENS = 256  # the title and the start of the summary carry most of the meaning; caps the peak per batch
 
 Embedder = Callable[[list[str]], np.ndarray]
@@ -48,7 +49,7 @@ def load_embedder() -> Embedder:
         REPO,
         revision=REVISION,
         allow_patterns=["onnx/model_quantized.onnx*", "tokenizer.json"],
-        local_dir=ROOT / "data" / "models" / "embeddinggemma-2",
+        local_dir=MODEL_DIR,
     )
     try:
         path = download(local_files_only=True)  # no Hub lookup when we have it, so it works offline

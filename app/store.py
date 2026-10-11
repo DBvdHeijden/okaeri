@@ -59,6 +59,13 @@ CREATE TABLE IF NOT EXISTS embeddings (
     vector BLOB NOT NULL,
     PRIMARY KEY (key, model)
 );
+
+-- The outcome of the last background embed run, for `main.py status`. One row.
+CREATE TABLE IF NOT EXISTS last_embed_run (
+    id     INTEGER PRIMARY KEY CHECK (id = 1),
+    at     TEXT NOT NULL,
+    result TEXT NOT NULL
+);
 """
 
 # Columns added after the first release; added in place to existing databases.
@@ -181,6 +188,11 @@ class Store:
                 (source_id, etag, last_modified, now),
             )
 
+    def last_fetch(self) -> tuple[str | None, int]:
+        """When any feed was last fetched, and how many feeds failed on their last try."""
+        with self._conn() as db:
+            return db.execute("SELECT max(fetched_at), count(error) FROM feeds").fetchone()
+
     def save_error(self, source_id: str, error: str) -> None:
         now = _iso(datetime.now(UTC))
         with self._conn() as db:
@@ -210,6 +222,17 @@ class Store:
                 "INSERT OR REPLACE INTO embeddings (key, model, vector) VALUES (?, ?, ?)",
                 [(key, model, vector) for key, vector in rows],
             )
+
+    def save_embed_run(self, result: str) -> None:
+        with self._conn() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO last_embed_run (id, at, result) VALUES (1, ?, ?)",
+                (_iso(datetime.now(UTC)), result),
+            )
+
+    def last_embed_run(self) -> tuple[str, str] | None:
+        with self._conn() as db:
+            return db.execute("SELECT at, result FROM last_embed_run").fetchone()
 
     def embeddings(self, model: str) -> dict[str, bytes]:
         with self._conn() as db:
