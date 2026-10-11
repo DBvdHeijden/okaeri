@@ -125,9 +125,9 @@
       let any = false;
       for (const group of form.querySelectorAll("[data-group]")) {
         let visible = 0;
-        for (const card of group.querySelectorAll(".card")) {
-          const match = card.dataset.name.includes(q);
-          card.hidden = !match;
+        for (const source of group.querySelectorAll(".source")) {
+          const match = source.dataset.name.includes(q);
+          source.parentElement.hidden = !match;
           if (match) visible++;
         }
         group.hidden = visible === 0;

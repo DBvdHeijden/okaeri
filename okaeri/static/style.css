@@ -87,7 +87,12 @@ button { font: inherit; color: inherit; }
   width: calc(100vw - clamp(0px, 10vw, 160px) - 680px - 48px);
   height: 100vh;
   pointer-events: none;
+  /* Own transition layer, so the theme switch doesn't freeze it in a snapshot. */
+  view-transition-name: lorenz;
 }
+
+::view-transition-old(lorenz) { display: none; }
+::view-transition-new(lorenz) { animation: none; }
 
 @media (min-width: 1200px) {
   .lorenz { display: block; }
@@ -192,6 +197,8 @@ h1 {
   font-size: 13px;
   line-height: 1.4;
 }
+.meta a { text-decoration: none; }
+.meta a:hover { color: var(--accent); }
 
 .hide-btn {
   align-self: center;
@@ -301,48 +308,57 @@ h1 {
   color: var(--muted);
 }
 
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
-  gap: 8px;
+.sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
 }
+.sources li { border-bottom: 1px solid var(--line); }
+.sources li[hidden] { display: none; }
 
-.card {
-  position: relative;
+.source {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 16px;
   min-height: 44px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  padding: 10px 0;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
 }
-.card:hover { background: var(--chip); }
-.card[hidden] { display: none; }
 
-.card input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
+.source-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.source-name { font-weight: 500; line-height: 1.35; }
+.source-site {
+  margin-left: 6px;
+  font: 400 12px/1 var(--mono);
+  color: var(--muted);
 }
-.card:has(input:checked) {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+.source-desc { color: var(--muted); font-size: 14px; line-height: 1.4; }
+
+/* Plain checkmark: accent when on, faint when off; unselected rows are dimmed. */
+.check {
+  appearance: none;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  background: var(--line);
+  cursor: pointer;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: background 120ms ease;
 }
-.card:has(input:focus-visible) {
+.check:checked { background: var(--accent); }
+.source:hover .check:not(:checked) { background: var(--muted); }
+
+.source-text { transition: opacity 120ms ease; }
+.source:has(.check:not(:checked)) .source-text { opacity: 0.5; }
+.source:hover .source-text { opacity: 1; }
+
+.source:has(.check:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-
-.card-name { font-weight: 500; }
-.card-url {
-  color: var(--muted);
-  font: 400 12px/1.4 var(--mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border-radius: 6px;
 }
 
 .footer-bar {

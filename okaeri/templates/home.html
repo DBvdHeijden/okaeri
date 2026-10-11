@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block head %}{% if pending and not articles %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block scripts %}<script src="{{ url_for('static', path='lorenz.js') }}" defer></script>{% endblock %}
 {% block aside %}<canvas class="lorenz" data-lorenz aria-hidden="true"></canvas>{% endblock %}
 {% block content %}
@@ -32,8 +33,9 @@
       <div class="row-text">
         <a class="title" href="{{ a.url }}" rel="noopener">{{ a.title }}</a>
         <p class="meta">
-          {{ a.source }} · <time datetime="{{ a.published_at.isoformat() }}">{{ a.published_at | ago }}</time>
-          {%- if a.also_on %} · also on {{ a.also_on | join(", ") }}{% endif %}
+          {%- if a.kind == "forum" and a.discussion_url and a.discussion_url != a.url %}<a href="{{ a.discussion_url }}" rel="noopener">{{ a.source }}</a>{% else %}{{ a.source }}{% endif %}
+          · <time datetime="{{ a.published_at.isoformat() }}">{{ a.published_at | ago }}</time>
+          {%- if a.also_on %} · {% if a.kind != "forum" and a.discussion_url and a.discussion_url != a.url %}<a href="{{ a.discussion_url }}" rel="noopener">also on {{ a.also_on | join(", ") }}</a>{% else %}also on {{ a.also_on | join(", ") }}{% endif %}{% endif %}
         </p>
       </div>
       <button type="button" class="icon-btn hide-btn" data-hide aria-label="Hide “{{ a.title }}”">
@@ -48,7 +50,7 @@
   {% endfor %}
 </ol>
 {% else %}
-<p class="empty">Nothing here yet.</p>
+<p class="empty">{% if pending %}Fetching your sources…{% else %}Nothing new here in the last two weeks.{% endif %}</p>
 {% endif %}
 
 <nav class="pager" data-pager aria-label="Pages" hidden>

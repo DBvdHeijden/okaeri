@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -10,8 +12,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from okaeri import mock
+from okaeri.fetch import Refresher
+from okaeri.models import KINDS
 from okaeri.rank import rank
+from okaeri.sources import BY_ID, SOURCES
+from okaeri.store import Store, default_path, open_store
 
 log = logging.getLogger("okaeri")
 
@@ -21,7 +26,25 @@ MAX_ARTICLES = 100  # the client splits these into viewport-sized pages
 TABS = [("all", "All"), ("paper", "Papers"), ("blog", "Blogs"), ("forum", "Forums"), ("news", "News")]
 KIND_LABELS = {"paper": "Papers", "blog": "Blogs", "forum": "Forums", "news": "News"}
 
-app = FastAPI(title="okaeri")
+
+
+def store() -> Store:
+    return open_store(default_path())
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = None
+    app.state.refresher = None
+    if os.environ.get("OKAERI_FETCH", "1") != "0":
+        app.state.refresher = Refresher(store(), BY_ID)
+        task = asyncio.create_task(app.state.refresher.run())
+    yield
+    if task:
+        task.cancel()
+
+
+app = FastAPI(title="okaeri", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 
@@ -41,9 +64,12 @@ templates.env.filters["ago"] = ago
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, kind: str = "all"):
-    if kind not in mock.KINDS:
+    selected = {i: BY_ID[i] for i in store().selected() if i in BY_ID}
+    if not selected:
+        return RedirectResponse("/onboarding", status_code=303)
+    if kind not in KINDS:
         kind = "all"
-    pool = [a for a in mock.articles() if kind == "all" or a.kind == kind]
+    pool = [a for a in store().articles(selected) if kind == "all" or a.kind == kind]
     ranked = rank(pool)
     return templates.TemplateResponse(
         request,
@@ -52,6 +78,7 @@ def home(request: Request, kind: str = "all"):
             "articles": ranked[:MAX_ARTICLES],
             "kind": kind,
             "tabs": TABS,
+            "pending": store().pending(selected),
             "today": datetime.now().strftime("%A, %-d %B"),
         },
     )
@@ -59,14 +86,19 @@ def home(request: Request, kind: str = "all"):
 
 @app.get("/onboarding", response_class=HTMLResponse)
 def onboarding(request: Request):
-    groups = [(KIND_LABELS[k], [s for s in mock.SOURCES if s.kind == k]) for k in mock.KINDS]
-    return templates.TemplateResponse(request, "onboarding.html", {"groups": groups})
+    groups = [(KIND_LABELS[k], [s for s in SOURCES if s.kind == k]) for k in KINDS]
+    return templates.TemplateResponse(
+        request, "onboarding.html", {"groups": groups, "selected": store().selected()}
+    )
 
 
 @app.post("/onboarding")
-def onboarding_submit(sources: Annotated[list[str] | None, Form()] = None):
-    # No persistence yet; this becomes the settings write later.
-    log.info("onboarding selected sources: %s", sources or [])
+def onboarding_submit(request: Request, sources: Annotated[list[str] | None, Form()] = None):
+    chosen = [i for i in sources or [] if i in BY_ID]
+    store().set_selected(chosen)
+    log.info("selected %d sources", len(chosen))
+    if refresher := getattr(request.app.state, "refresher", None):
+        refresher.wake.set()
     return RedirectResponse("/", status_code=303)
 
 
