@@ -99,6 +99,8 @@
         page.push(row); used += h;
       }
       if (page.length) pages.push(page);
+      // Reserve the full height, so the pager stays put on short pages.
+      feed.style.minHeight = `${available}px`;
 
       const keep = pages.findIndex((p) => p.includes(anchor));
       show(keep < 0 ? 0 : keep, animate);
