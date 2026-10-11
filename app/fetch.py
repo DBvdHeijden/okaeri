@@ -284,7 +284,8 @@ class Refresher:
                 selected = [self.catalogue[i] for i in settings.enabled_sources() if i in self.catalogue]
                 if due := await asyncio.to_thread(self.store.due, selected):
                     await refresh(self.store, due)
-                    await self.embed()
+                # Every cycle, not just after a fetch: the first one embeds the backlog and a failed load is retried.
+                await self.embed()
             except Exception:
                 log.exception("refresh cycle failed")
             try:

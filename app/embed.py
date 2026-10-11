@@ -23,6 +23,7 @@ DIMS = 256  # Matryoshka: the model card calls quality near-lossless down to 256
 MODEL = f"embeddinggemma-2-text@{DIMS}"  # stored with each vector, so a new model or size re-embeds everything
 BATCH = 16  # faster than 32 and ~600 MB less peak RAM, measured on 200 feed items
 SUMMARY_CHARS = 500
+MAX_TOKENS = 256  # the title and the start of the summary carry most of the meaning; caps the peak per batch
 
 Embedder = Callable[[list[str]], np.ndarray]
 
@@ -35,9 +36,13 @@ def load_embedder() -> Embedder:
         allow_patterns=["onnx/model_quantized.onnx*", "tokenizer.json"],
         local_dir=ROOT / "data" / "models" / "embeddinggemma-2",
     )
-    session = ort.InferenceSession(f"{path}/onnx/model_quantized.onnx")
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 2  # a background job: never take every core
+    options.inter_op_num_threads = 1
+    session = ort.InferenceSession(f"{path}/onnx/model_quantized.onnx", options)
     tokenizer = Tokenizer.from_file(f"{path}/tokenizer.json")
     tokenizer.enable_padding(pad_id=tokenizer.token_to_id("<pad>"), pad_token="<pad>")
+    tokenizer.enable_truncation(MAX_TOKENS)
     no_media = np.zeros((0, 512), np.float32)  # the export takes image, video and audio features too
 
     def embed(texts: list[str]) -> np.ndarray:
