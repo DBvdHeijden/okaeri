@@ -15,10 +15,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import settings
-from app.embed import model_downloaded, pending
+from app.embed import model_downloaded, pending, stored_vectors
 from app.fetch import Refresher
-from app.models import Article, Event
-from app.rank import rank, sample
+from app.models import Article
+from app.rank import rank, sample, switched_on
 from app.sources import BY_ID, FORMATS, SOURCES, TOPICS, format_of, in_tab, source_format, source_matches
 from app.store import Store, default_path, open_store
 
@@ -88,17 +88,6 @@ templates.env.filters["count"] = count
 templates.env.globals["format_of"] = format_of
 
 
-def switched_on(events: list[Event], on: str, off: str) -> dict[str, datetime]:
-    """Stories whose latest on/off event is `on` (liked: seed/unseed, hidden: hide/unhide), with when."""
-    state = {}
-    for e in events:
-        if e.type == on:
-            state[e.key] = e.at
-        elif e.type == off:
-            state.pop(e.key, None)
-    return state
-
-
 def history(view: str) -> list[Article]:
     """Opened, liked or hidden stories, most recent first; chronological by design, so not ranked."""
     events = store().events()
@@ -127,7 +116,8 @@ def home(
         ranked = history(show)
     else:
         pool = [a for a in store().articles(selected) if in_tab(a, active["tags"], active["sources"])]
-        ranked = rank(pool, store().events(), settings.load())
+        vectors = stored_vectors(store()) if active["sort"] == "recommended" else None
+        ranked = rank(pool, store().events(), settings.load(), vectors, active["sort"])
     return templates.TemplateResponse(
         request,
         "home.html",

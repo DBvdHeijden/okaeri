@@ -39,19 +39,15 @@
     fetch(form.action, { method: "POST", body, redirect: "manual" })
       .then((r) => { if (!r.ok && r.type !== "opaqueredirect") revert(); }, revert);
 
-  // Hide / undo: the server records it; collapse the row in place instead of reloading.
+  // Hide: the story goes at once; History › Hidden brings it back. If the save fails, reload to show
+  // the feed as it really is.
   document.addEventListener("submit", (e) => {
-    const row = e.target.closest(".row");
-    if (!row || !e.target.matches("[data-hide], [data-undo]")) return;  // History's undo buttons reload the list
+    if (!e.target.matches("[data-hide]")) return;
     e.preventDefault();
-    const hiding = e.target.matches("[data-hide]");
-    const show = (hidden) => {
-      row.querySelector(".row-body").hidden = hidden;
-      row.querySelector(".row-hidden").hidden = !hidden;
-    };
-    show(hiding);
-    save(e.target, null, () => show(!hiding));
-    row.querySelector(hiding ? "[data-undo] button" : "[data-hide] button").focus();
+    const row = e.target.closest(".row");
+    save(e.target, null, () => location.reload());
+    if (paging) paging.remove(row);
+    else row.remove();
   });
 
   // Onboarding ratings save in place; pressing the chosen one again takes the rating back.
@@ -75,7 +71,7 @@
     const feed = document.querySelector(".feed");
     const pager = document.querySelector("[data-pager]");
     if (!feed || !pager) return;
-    const rows = [...feed.querySelectorAll(".row")];
+    let rows = [...feed.querySelectorAll(".row")];
     const pageNum = pager.querySelector("[data-page-num]");
     let pages = [], current = 0, moving = 0;
 
@@ -114,7 +110,7 @@
     };
 
     const paginate = (animate = false) => {
-      const anchor = pages[current]?.[0];
+      const anchor = pages[current]?.find((row) => rows.includes(row));  // stay on this page, even if its first row left
       for (const row of rows) row.removeAttribute("data-off");
       pager.hidden = false;
       const padBottom = parseFloat(getComputedStyle(document.querySelector(".page")).paddingBottom);
@@ -137,7 +133,13 @@
       feed.dataset.paged = "";
     };
 
-    paging = { pager, paginate, move };
+    const remove = (row) => {
+      rows = rows.filter((r) => r !== row);
+      row.remove();
+      paginate();
+    };
+
+    paging = { pager, paginate, move, remove };
     paginate(true);
   }
 
@@ -206,6 +208,12 @@
 
     list.addEventListener("click", (e) => {
       const row = e.target.closest("[data-tab-row]");
+      const sortBtn = e.target.closest("[data-sort-tab]");
+      if (sortBtn) {
+        sortBtn.dataset.sort = sortBtn.dataset.sort === "recommended" ? "latest" : "recommended";
+        sortBtn.textContent = `Sort: ${sortBtn.dataset.sort}`;
+        return;
+      }
       if (e.target.closest("[data-hide-tab]")) {
         const hidden = row.classList.toggle("is-hidden");
         e.target.textContent = hidden ? "Show" : "Hide";
@@ -235,6 +243,7 @@
         tags: [...picked(row, "format"), ...picked(row, "topic")].map((c) => c.value),
         sources: picked(row, "source").map((c) => c.value),  // only those still offered
         hidden: row.classList.contains("is-hidden"),
+        sort: row.querySelector("[data-sort-tab]")?.dataset.sort,
       })));
     });
   }

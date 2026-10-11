@@ -13,8 +13,9 @@ log = logging.getLogger("okaeri")
 PATH = ROOT / "settings.json"
 EXAMPLE = ROOT / "settings.example.json"
 MAX_TABS = 6  # custom tabs, besides All and History
-ALL_TAB = {"name": "All", "slug": "all", "tags": (), "sources": (), "history": False, "builtin": True}
-HISTORY_TAB = {"name": "History", "slug": "history", "tags": (), "sources": (), "history": True, "builtin": True}
+# History is chronological by design; every other tab sorts by "latest" or "recommended".
+ALL_TAB = {"name": "All", "slug": "all", "tags": (), "sources": (), "history": False, "builtin": True, "sort": "latest"}
+HISTORY_TAB = {"name": "History", "slug": "history", "tags": (), "sources": (), "history": True, "builtin": True, "sort": "latest"}
 
 
 def load() -> dict:
@@ -39,7 +40,7 @@ def slug(name: str) -> str:
 def all_tabs() -> list[dict]:
     """Every tab in order, hidden ones included: All, the custom tabs, History."""
     stored = load()["tabs"]
-    builtin_hidden = {t["builtin"]: t["hidden"] for t in stored if "builtin" in t}
+    builtin = {t["builtin"]: t for t in stored if "builtin" in t}
     custom = [t for t in stored if "builtin" not in t]
     if len(custom) > MAX_TABS:
         log.warning("showing the first %d tabs; ignoring %s", MAX_TABS, [t["name"] for t in custom[MAX_TABS:]])
@@ -52,14 +53,20 @@ def all_tabs() -> list[dict]:
             "history": False,
             "builtin": False,
             "hidden": t.get("hidden", False),
+            "sort": sort_of(t),
         }
         for t in custom[:MAX_TABS]
     ]
+    all_tab, history_tab = builtin.get("all", {}), builtin.get("history", {})
     return [
-        {**ALL_TAB, "hidden": builtin_hidden.get("all", False)},
+        {**ALL_TAB, "hidden": all_tab.get("hidden", False), "sort": sort_of(all_tab)},
         *custom,
-        {**HISTORY_TAB, "hidden": builtin_hidden.get("history", False)},
+        {**HISTORY_TAB, "hidden": history_tab.get("hidden", False)},
     ]
+
+
+def sort_of(tab: dict) -> str:
+    return "recommended" if tab.get("sort") == "recommended" else "latest"
 
 
 def tabs() -> list[dict]:
@@ -85,7 +92,7 @@ def set_enabled_sources(source_ids: list[str]) -> None:
 
 def set_tabs(rows: list[dict]) -> None:
     """Rows from the tab editor: custom tabs need a unique name; All and History can only be hidden."""
-    builtin_hidden = {row["builtin"]: bool(row.get("hidden")) for row in rows if row.get("builtin") in ("all", "history")}
+    builtin = {row["builtin"]: row for row in rows if row.get("builtin") in ("all", "history")}
     taken, custom = {"all", "history"}, []
     for row in rows:
         name = str(row.get("name") or "").strip()
@@ -95,11 +102,11 @@ def set_tabs(rows: list[dict]) -> None:
         tags = [t for t in row.get("tags", []) if t in FORMATS | TOPICS]
         # Picked sources the formats and topics no longer leave over would narrow invisibly: drop them.
         sources = [s for s in row.get("sources", []) if s in BY_ID and tab_covers(BY_ID[s], tags, ())]
-        custom.append({"name": name, "tags": tags, "sources": sources, "hidden": bool(row.get("hidden"))})
+        custom.append({"name": name, "tags": tags, "sources": sources, "hidden": bool(row.get("hidden")), "sort": sort_of(row)})
     settings = load()
     settings["tabs"] = [
-        {"builtin": "all", "hidden": builtin_hidden.get("all", False)},
+        {"builtin": "all", "hidden": bool(builtin.get("all", {}).get("hidden")), "sort": sort_of(builtin.get("all", {}))},
         *custom[:MAX_TABS],
-        {"builtin": "history", "hidden": builtin_hidden.get("history", False)},
+        {"builtin": "history", "hidden": bool(builtin.get("history", {}).get("hidden"))},
     ]
     save(settings)

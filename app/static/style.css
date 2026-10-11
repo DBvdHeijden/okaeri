@@ -247,15 +247,6 @@ h1 {
 .row:focus-within .hide-btn { opacity: 1; }
 @media (hover: none) { .hide-btn { opacity: 1; } }
 
-.row-hidden {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  color: var(--muted);
-  font-size: 14px;
-}
-.row-hidden[hidden] { display: none; }
 
 .link-btn {
   min-height: 44px;

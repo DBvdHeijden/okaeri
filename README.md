@@ -53,7 +53,7 @@ Pick sources on the Settings page (the gear), or list their ids under `sources.e
 
 ## Embedding model
 
-New items are embedded locally with [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2) (downloaded on first use into `data/models/`, ~330 MB), licensed under the [Apache License 2.0](https://ai.google.dev/gemma/docs/gemma_4_license). Ranking doesn't use the embeddings yet.
+New items are embedded locally with [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2) (downloaded on first use into `data/models/`, ~330 MB), licensed under the [Apache License 2.0](https://ai.google.dev/gemma/docs/gemma_4_license). Tabs set to “Recommended” rank by them: stories close to what you opened or liked go up, look-alikes of what you hid go down.
 
 ## Development
 
@@ -85,7 +85,7 @@ Layout:
 - `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it. Tabs live here, edited in onboarding step 4 and in Settings: `{"builtin": "all"|"history", "hidden"}` or custom `{"name", "tags", "sources", "hidden"}`. Each narrows the one before: the format tags, then the topic tags within those, then just the listed source ids. Leave one out and it doesn't narrow; nothing at all shows everything. All is always first and History last.
 - `data/`: the SQLite database, downloaded models and the log (gitignored).
 - `app/server.py`: routes. Every article list passes through `rank()`.
-- `app/rank.py`: the ranking seam. It currently sorts by recency.
+- `app/rank.py`: the ranking seam: Latest (recency) or Recommended (nearest opened/liked story, minus half the nearest hidden one).
 - `app/sources.py`: loads the catalog; `tags_for()`, `format_of()` and tab matching.
 - `app/fetch.py`: feed parsing (RSS/Atom, HF papers), conditional GET, and the background refresher.
 - `app/embed.py`: loads the embedding model and embeds new items.

@@ -84,7 +84,7 @@ def test_pending_state(store):
 
 def test_routes_go_through_rank(store, monkeypatch):
     seed(store)
-    monkeypatch.setattr(server, "rank", lambda arts, events, settings: sorted(arts, key=lambda a: a.title))
+    monkeypatch.setattr(server, "rank", lambda arts, *args: sorted(arts, key=lambda a: a.title))
     assert titles(client.get("/").text) == ["A paper", "Blog post", "Forum link"]
 
 

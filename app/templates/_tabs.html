@@ -11,6 +11,7 @@
     <span class="tab-summary" data-tab-summary>
       {%- if t.history %}Links you opened{% elif t.tags or t.sources %}{{ ((t.tags | list) + (t.sources | map("source_name") | list)) | join(" · ") }}{% else %}Everything{% endif -%}
     </span>
+    {% if not t.history %}<button type="button" class="link-btn" data-sort-tab data-sort="{{ t.sort }}">Sort: {{ t.sort }}</button>{% endif %}
     <button type="button" class="link-btn" data-hide-tab>{{ "Show" if t.hidden else "Hide" }}</button>
     {% if not t.builtin %}<button type="button" class="link-btn" data-edit-tab>Edit</button>{% endif %}
   </div>
@@ -43,7 +44,7 @@
 <ul class="tab-list" data-tab-list>
   {% for t in tabs %}{{ tab_row(t) }}{% endfor %}
 </ul>
-<template data-tab-template>{{ tab_row({"name": "", "tags": [], "sources": []}) }}</template>
+<template data-tab-template>{{ tab_row({"name": "", "tags": [], "sources": [], "sort": "latest"}) }}</template>
 <button type="button" class="link-btn add-tab" data-add-tab>+ New tab</button>
 <input type="hidden" name="tabs">
 {% endmacro %}

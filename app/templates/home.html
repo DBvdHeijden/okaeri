@@ -66,12 +66,6 @@
       </form>
       {% endif %}
     </div>
-    <div class="row-hidden" hidden>
-      <span>Hidden.</span>
-      <form method="post" action="/unhide/{{ a.id }}" data-undo>
-        <button type="submit" class="link-btn">Undo</button>
-      </form>
-    </div>
   </li>
   {% endfor %}
 </ol>

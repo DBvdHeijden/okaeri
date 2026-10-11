@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # run as a file
 import numpy as np
 
 from app import settings
-from app.embed import MODEL, load_embedder
+from app.embed import load_embedder, stored_vectors
 from app.sources import BY_ID
 from app.store import default_path, open_store
 
@@ -25,7 +25,7 @@ if bool(args.query) == bool(args.item):
     parser.error("give either a query or --item")
 
 store = open_store(default_path())
-vectors = {key: np.frombuffer(blob, np.float32) for key, blob in store.embeddings(MODEL).items()}
+vectors = stored_vectors(store)
 feed = [a for a in store.articles({i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}) if a.key in vectors]
 
 if args.item:

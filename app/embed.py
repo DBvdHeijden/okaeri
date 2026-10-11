@@ -1,4 +1,4 @@
-"""Article embeddings with EmbeddingGemma 2, run locally. An experiment: rank() doesn't use them yet.
+"""Article embeddings with EmbeddingGemma 2, run locally; rank() uses them for Recommended.
 
     python -m app.embed    # embed everything pending, then exit
 
@@ -80,6 +80,10 @@ def load_embedder() -> Embedder:
         return (vectors / np.linalg.norm(vectors, axis=1, keepdims=True)).astype(np.float32)
 
     return embed
+
+
+def stored_vectors(store: Store) -> dict[str, np.ndarray]:
+    return {key: np.frombuffer(blob, np.float32) for key, blob in store.embeddings(MODEL).items()}
 
 
 def model_downloaded() -> bool:
