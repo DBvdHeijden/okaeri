@@ -50,6 +50,14 @@ def format_of(article: Article) -> str:
     return source_format(BY_ID[article.source_id])
 
 
+def source_matches(source: Source, formats: Iterable[str], topics: Iterable[str]) -> bool:
+    """For onboarding. Picking nothing means everything; general sources (no topic) fit any topic."""
+    formats, topics, own_topics = set(formats), set(topics), set(source.tags) & TOPICS
+    if formats and source_format(source) not in formats:
+        return False
+    return not topics or not own_topics or bool(own_topics & topics)
+
+
 def in_tab(article: Article, tab_tags: Iterable[str]) -> bool:
     """Any tag within a group (formats, topics) matches; every group the tab uses must match."""
     have, wanted = tags_for(article), set(tab_tags)

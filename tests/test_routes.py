@@ -101,15 +101,15 @@ def test_show_more(store):
 
 def test_onboarding_lists_sources_and_checks_selected(store):
     settings.set_enabled_sources(["hn"])
-    html = client.get("/onboarding").text
+    html = client.get("/onboarding/sources").text
     assert all(s.name in html for s in SOURCES)
     assert re.search(r'value="hn" checked', html)
     assert not re.search(r'value="lobsters" checked', html)
 
 
 def test_onboarding_submit_persists(store):
-    r = client.post("/onboarding", data={"sources": ["hn", "arxiv-cs.lg", "bogus"]}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/"
+    r = client.post("/onboarding/sources", data={"sources": ["hn", "arxiv-cs.lg", "bogus"]}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/onboarding/sample"
     assert settings.enabled_sources() == ["hn", "arxiv-cs.lg"]
 
 

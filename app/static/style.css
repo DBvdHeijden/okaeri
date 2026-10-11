@@ -389,6 +389,9 @@ h1 {
 }
 
 .primary-btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
   min-height: 44px;
   padding: 0 22px;
   border: 0;
@@ -399,6 +402,20 @@ h1 {
   cursor: pointer;
 }
 .primary-btn:hover { opacity: 0.88; }
+
+/* A secondary action next to .primary-btn: quiet like the tabs until hovered. */
+.quiet-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 15px;
+}
+.quiet-btn:hover { color: var(--text); background: var(--chip); }
+.footer-actions { display: flex; align-items: center; gap: 8px; }
 
 @media (max-width: 480px) {
   .page { padding-top: 24px; }

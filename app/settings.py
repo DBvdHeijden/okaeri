@@ -45,6 +45,16 @@ def tabs() -> list[dict]:
     ]
 
 
+def interests() -> dict:
+    return load()["interests"]
+
+
+def set_interests(formats: list[str], topics: list[str]) -> None:
+    settings = load()
+    settings["interests"] = {"formats": formats, "topics": topics}
+    save(settings)
+
+
 def set_enabled_sources(source_ids: list[str]) -> None:
     settings = load()
     settings["sources"]["enabled"] = source_ids

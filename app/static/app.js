@@ -133,7 +133,7 @@
   if (form) {
     const count = form.querySelector("[data-selected-count]");
     const updateCount = () => {
-      const n = form.querySelectorAll('input[name="sources"]:checked').length;
+      const n = form.querySelectorAll(".check:checked").length;
       count.textContent = `${n} selected`;
     };
     form.addEventListener("change", updateCount);
@@ -141,7 +141,7 @@
 
     const search = document.querySelector("[data-source-search]");
     const noResults = form.querySelector("[data-no-results]");
-    search.addEventListener("input", () => {
+    search?.addEventListener("input", () => {
       const q = search.value.trim().toLowerCase();
       let any = false;
       for (const group of form.querySelectorAll("[data-group]")) {

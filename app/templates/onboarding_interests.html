@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Interests · okaeri{% endblock %}
+{% block actions %}
+  <a class="icon-btn" href="/" aria-label="Back to home">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+  </a>
+{% endblock %}
+{% block content %}
+<header class="masthead">
+  <div>
+    <p class="kicker" lang="ja">はじめまして</p>
+    <h1>What are you into?</h1>
+    <p class="date">Step 1 of 3 · Pick fields and formats. Pick none to see everything.</p>
+  </div>
+</header>
+
+<form method="post" action="/onboarding" data-onboarding>
+  {% for legend, name, options in groups %}
+  <fieldset class="group">
+    <legend>{{ legend }}</legend>
+    <ul class="sources">
+      {% for value, label, n in options %}
+      <li>
+        <label class="source">
+          <span class="source-text">
+            <span class="source-name">{{ label }}</span>
+            <span class="source-desc">{{ n | count("source") }}</span>
+          </span>
+          <input type="checkbox" class="check" aria-label="{{ label }}" name="{{ name }}" value="{{ value }}" {% if value in chosen %}checked{% endif %}>
+        </label>
+      </li>
+      {% endfor %}
+    </ul>
+  </fieldset>
+  {% endfor %}
+
+  <div class="footer-bar">
+    <span data-selected-count aria-live="polite">0 selected</span>
+    <button type="submit" class="primary-btn">Next</button>
+  </div>
+</form>
+{% endblock %}

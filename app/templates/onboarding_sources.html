@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Sources · okaeri{% endblock %}
-{% block content %}
-<div class="top-actions">
-  <a class="icon-btn" href="/" aria-label="Back to home">
+{% block actions %}
+  <a class="icon-btn" href="/onboarding" aria-label="Back to interests">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
   </a>
-</div>
+{% endblock %}
+{% block content %}
 <header class="masthead">
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>Pick your sources</h1>
-    <p class="date">Choose what shows up on your homepage. You can change this later.</p>
+    <p class="date">Step 2 of 3 · These match your interests. You can change this later.</p>
   </div>
 </header>
 
@@ -26,7 +26,7 @@
   <input type="search" placeholder="Search sources" autocomplete="off" data-source-search>
 </label>
 
-<form method="post" action="/onboarding" data-onboarding>
+<form method="post" action="/onboarding/sources" data-onboarding>
   {% for label, sources in groups %}
   <fieldset class="group" data-group>
     <legend>{{ label }}</legend>
@@ -49,7 +49,7 @@
 
   <div class="footer-bar">
     <span data-selected-count aria-live="polite">0 selected</span>
-    <button type="submit" class="primary-btn">Continue</button>
+    <button type="submit" class="primary-btn">Next</button>
   </div>
 </form>
 {% endblock %}

@@ -13,7 +13,7 @@ OKAERI_FETCH=0 uv run main.py      # don't fetch feeds
 OKAERI_DB=/tmp/x.db uv run main.py # default: data/okaeri.db
 ```
 
-On first run you're sent to onboarding to pick sources; nothing is fetched until you do.
+On first run you're sent to onboarding: pick fields and formats, then sources, then tick a few sample stories you'd read (saved as seed events for ranking). Nothing is fetched until you pick sources.
 
 ## Test
 
