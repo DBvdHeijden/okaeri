@@ -59,7 +59,12 @@ def ago(dt: datetime) -> str:
     return "now"
 
 
+def count(n: int, word: str) -> str:
+    return f"{n:,} {word}" + ("" if n == 1 else "s")
+
+
 templates.env.filters["ago"] = ago
+templates.env.filters["count"] = count
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -67,7 +72,12 @@ def home(request: Request, kind: str = "all"):
     selected = {i: BY_ID[i] for i in store().selected() if i in BY_ID}
     if not selected:
         return RedirectResponse("/onboarding", status_code=303)
-    if kind not in KINDS:
+    # Only offer tabs for kinds the user follows; one kind needs no tabs at all.
+    kinds = {s.kind for s in selected.values()}
+    tabs = [(value, label) for value, label in TABS if value == "all" or value in kinds]
+    if len(tabs) <= 2:
+        tabs = []
+    if kind not in kinds:
         kind = "all"
     pool = [a for a in store().articles(selected) if kind == "all" or a.kind == kind]
     ranked = rank(pool)
@@ -77,7 +87,7 @@ def home(request: Request, kind: str = "all"):
         {
             "articles": ranked[:MAX_ARTICLES],
             "kind": kind,
-            "tabs": TABS,
+            "tabs": tabs,
             "pending": store().pending(selected),
             "today": datetime.now().strftime("%A, %-d %B"),
         },

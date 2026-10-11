@@ -33,6 +33,8 @@ TICK_SECONDS = 60
 _ARXIV_ID = re.compile(r"(\d{4}\.\d{4,5})(?:v\d+)?")
 _TRACKING = {"ref", "source", "fbclid", "gclid"}
 _TAGS = re.compile(r"<[^>]+>")
+_VOTES = re.compile(r"Votes:\s*(\d+)")  # Tildes puts counts in the RSS description
+_COMMENTS = re.compile(r"Comments:\s*(\d+)")
 _SPACE = re.compile(r"\s+")
 
 
@@ -82,8 +84,10 @@ def parse_feed(content: bytes, source: Source, now: datetime | None = None) -> l
         if not link:
             continue
         url = urljoin(base, link)
-        summary = clean_text(entry.get("summary", ""), 600)
-        if summary.lower() == "comments":  # HN/Lobsters put only a comments link here
+        raw_summary = entry.get("summary", "")
+        summary = clean_text(raw_summary, 600)
+        votes, comments = _VOTES.search(raw_summary), _COMMENTS.search(raw_summary)
+        if summary.lower() == "comments" or summary.startswith("Link URL:"):  # link-aggregator boilerplate
             summary = ""
         title = clean_text(entry.get("title", ""), 300) or clean_text(summary, 100)
         if not title:
@@ -96,6 +100,8 @@ def parse_feed(content: bytes, source: Source, now: datetime | None = None) -> l
             published_at=published,
             summary=summary,
             discussion_url=entry.get("comments"),
+            score=int(votes.group(1)) if votes else None,
+            comments=int(comments.group(1)) if comments else None,
         ))
     return _keep_recent(items, now)
 
@@ -117,6 +123,71 @@ def parse_hf_papers(data: list[dict], now: datetime | None = None) -> list[Fetch
             published_at=datetime.fromisoformat(published.replace("Z", "+00:00")) if published else now,
             summary=clean_text(entry.get("summary") or paper.get("summary", ""), 600),
             discussion_url=url,
+            score=paper.get("upvotes"),
+            comments=entry.get("numComments"),
+        ))
+    return _keep_recent(items, now)
+
+
+def _iso_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def parse_hn_algolia(data: dict, now: datetime | None = None) -> list[FetchedItem]:
+    now = now or datetime.now(UTC)
+    items = []
+    for hit in data.get("hits", []):
+        if not hit.get("title"):
+            continue
+        thread = f"https://news.ycombinator.com/item?id={hit['objectID']}"
+        url = hit.get("url") or thread  # Ask HN etc. have no external link
+        items.append(FetchedItem(
+            key=item_key(url),
+            url=url,
+            title=clean_text(hit["title"], 300),
+            published_at=datetime.fromtimestamp(hit["created_at_i"], UTC),
+            discussion_url=thread,
+            score=hit.get("points"),
+            comments=hit.get("num_comments"),
+        ))
+    return _keep_recent(items, now)
+
+
+def parse_lobsters(data: list[dict], now: datetime | None = None) -> list[FetchedItem]:
+    now = now or datetime.now(UTC)
+    items = []
+    for story in data:
+        url = story.get("url") or story["comments_url"]
+        items.append(FetchedItem(
+            key=item_key(url),
+            url=url,
+            title=clean_text(story["title"], 300),
+            published_at=_iso_datetime(story["created_at"]),
+            summary=clean_text(story.get("description", ""), 600),
+            discussion_url=story["comments_url"],
+            score=story.get("score"),
+            comments=story.get("comment_count"),
+        ))
+    return _keep_recent(items, now)
+
+
+LW_QUERY = """{ posts(input: {terms: {view: "new", limit: 30, af: true}}) {
+  results { title pageUrl url baseScore commentCount postedAt } } }"""
+
+
+def parse_lw_graphql(data: dict, now: datetime | None = None) -> list[FetchedItem]:
+    now = now or datetime.now(UTC)
+    items = []
+    for post in data.get("data", {}).get("posts", {}).get("results", []):
+        url = post.get("url") or post["pageUrl"]  # link posts point elsewhere
+        items.append(FetchedItem(
+            key=item_key(url),
+            url=url,
+            title=clean_text(post["title"], 300),
+            published_at=_iso_datetime(post["postedAt"]),
+            discussion_url=post["pageUrl"],
+            score=post.get("baseScore"),
+            comments=post.get("commentCount"),
         ))
     return _keep_recent(items, now)
 
@@ -132,16 +203,26 @@ async def fetch_source(client: httpx.AsyncClient, source: Source, store: Store) 
     if last_modified:
         headers["If-Modified-Since"] = last_modified
 
-    resp = await client.get(source.url, headers=headers)
+    if source.fetcher == "lw_graphql":
+        resp = await client.post(source.url, json={"query": LW_QUERY})
+    else:
+        resp = await client.get(source.url, headers=headers)
     if resp.status_code == 304:
         store.save_fetch(source.id, None, etag, last_modified)
         return
     resp.raise_for_status()
 
-    if source.fetcher == "hf_papers":
-        items = parse_hf_papers(resp.json())
-    else:
-        items = parse_feed(resp.content, source)
+    match source.fetcher:
+        case "rss":
+            items = parse_feed(resp.content, source)
+        case "hf_papers":
+            items = parse_hf_papers(resp.json())
+        case "hn_algolia":
+            items = parse_hn_algolia(resp.json())
+        case "lobsters_json":
+            items = parse_lobsters(resp.json())
+        case "lw_graphql":
+            items = parse_lw_graphql(resp.json())
     store.save_fetch(source.id, items, resp.headers.get("ETag"), resp.headers.get("Last-Modified"))
     log.info("fetched %s: %d items", source.id, len(items))
 

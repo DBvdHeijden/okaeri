@@ -19,11 +19,13 @@
   </div>
 </header>
 
+{% if tabs %}
 <nav class="tabs" aria-label="Filter by kind">
   {% for value, label in tabs %}
   <a href="/?kind={{ value }}" {% if value == kind %}aria-current="page"{% endif %}>{{ label }}</a>
   {% endfor %}
 </nav>
+{% endif %}
 
 {% if articles %}
 <ol class="feed">
@@ -32,10 +34,15 @@
     <div class="row-body">
       <div class="row-text">
         <a class="title" href="{{ a.url }}" rel="noopener">{{ a.title }}</a>
+        {%- set thread = a.discussion_url if a.discussion_url and a.discussion_url != a.url else none %}
+        {#- Without a comment count to link, the source / "also on" text links to the thread instead. #}
+        {%- set link_names = thread and a.comments is none %}
         <p class="meta">
-          {%- if a.kind == "forum" and a.discussion_url and a.discussion_url != a.url %}<a href="{{ a.discussion_url }}" rel="noopener">{{ a.source }}</a>{% else %}{{ a.source }}{% endif %}
+          {%- if link_names and a.kind == "forum" %}<a href="{{ thread }}" rel="noopener">{{ a.source }}</a>{% else %}{{ a.source }}{% endif %}
           · <time datetime="{{ a.published_at.isoformat() }}">{{ a.published_at | ago }}</time>
-          {%- if a.also_on %} · {% if a.kind != "forum" and a.discussion_url and a.discussion_url != a.url %}<a href="{{ a.discussion_url }}" rel="noopener">also on {{ a.also_on | join(", ") }}</a>{% else %}also on {{ a.also_on | join(", ") }}{% endif %}{% endif %}
+          {%- if a.also_on %} · {% if link_names and a.kind != "forum" %}<a href="{{ thread }}" rel="noopener">also on {{ a.also_on | join(", ") }}</a>{% else %}also on {{ a.also_on | join(", ") }}{% endif %}{% endif %}
+          {%- if a.score is not none %} · {{ a.score | count("point") }}{% endif %}
+          {%- if a.comments is not none %} · {% if a.discussion_url %}<a href="{{ a.discussion_url }}" rel="noopener">{{ a.comments | count("comment") }}</a>{% else %}{{ a.comments | count("comment") }}{% endif %}{% endif %}
         </p>
       </div>
       <button type="button" class="icon-btn hide-btn" data-hide aria-label="Hide “{{ a.title }}”">

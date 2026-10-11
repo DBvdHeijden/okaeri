@@ -5,8 +5,9 @@ from typing import Literal
 Kind = Literal["paper", "blog", "forum", "news"]
 KINDS: tuple[Kind, ...] = ("paper", "blog", "forum", "news")
 
-# "rss" covers RSS and Atom (feedparser handles both); "hf_papers" is HF's JSON API.
-Fetcher = Literal["rss", "hf_papers"]
+# "rss" covers RSS and Atom (feedparser handles both); the rest are JSON APIs
+# used where the RSS feed lacks points and comment counts.
+Fetcher = Literal["rss", "hf_papers", "hn_algolia", "lobsters_json", "lw_graphql"]
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,8 @@ class FetchedItem:
     published_at: datetime
     summary: str = ""
     discussion_url: str | None = None
+    score: int | None = None  # points / upvotes, where the source has them
+    comments: int | None = None
 
 
 @dataclass(frozen=True)
@@ -45,4 +48,6 @@ class Article:
     published_at: datetime
     also_on: tuple[str, ...] = ()
     discussion_url: str | None = None
+    score: int | None = None
+    comments: int | None = None
     summary: str = field(default="", repr=False)

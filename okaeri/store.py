@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS items (
     discussion_url TEXT,
     published_at   TEXT NOT NULL,
     fetched_at     TEXT NOT NULL,
+    score          INTEGER,
+    comments       INTEGER,
     PRIMARY KEY (source_id, key)
 );
 CREATE INDEX IF NOT EXISTS items_published_at ON items (published_at);
@@ -38,6 +40,9 @@ CREATE TABLE IF NOT EXISTS selected_sources (
     source_id TEXT PRIMARY KEY
 );
 """
+
+# Columns added after the first release; added in place to existing databases.
+MIGRATIONS = {"items": {"score": "INTEGER", "comments": "INTEGER"}}
 
 # When the same story comes from several sources, the first kind here is shown;
 # the others become "also on". Forums last: they mostly link to someone else's post.
@@ -63,6 +68,11 @@ class Store:
         with self._conn() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
+            for table, columns in MIGRATIONS.items():
+                have = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+                for name, decl in columns.items():
+                    if name not in have:
+                        db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -123,14 +133,17 @@ class Store:
             if items:
                 db.executemany(
                     """
-                    INSERT INTO items (source_id, key, url, title, summary, discussion_url, published_at, fetched_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO items (source_id, key, url, title, summary, discussion_url, published_at,
+                                       fetched_at, score, comments)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (source_id, key) DO UPDATE SET
                         url = excluded.url, title = excluded.title, summary = excluded.summary,
-                        discussion_url = excluded.discussion_url, fetched_at = excluded.fetched_at
+                        discussion_url = excluded.discussion_url, fetched_at = excluded.fetched_at,
+                        score = excluded.score, comments = excluded.comments
                     """,  # published_at is kept from first sight, so undated items don't float up
                     [
-                        (source_id, i.key, i.url, i.title, i.summary, i.discussion_url, _iso(i.published_at), now)
+                        (source_id, i.key, i.url, i.title, i.summary, i.discussion_url, _iso(i.published_at),
+                         now, i.score, i.comments)
                         for i in items
                     ],
                 )
@@ -172,7 +185,8 @@ class Store:
         with self._conn() as db:
             rows = db.execute(
                 f"""
-                SELECT source_id, key, url, title, summary, discussion_url, published_at FROM items
+                SELECT source_id, key, url, title, summary, discussion_url, published_at, score, comments
+                FROM items
                 WHERE source_id IN ({marks}) AND published_at >= ?
                 """,
                 [*sources, cutoff],
@@ -185,9 +199,15 @@ class Store:
         articles = []
         for key, group in groups.items():
             group.sort(key=lambda r: (PRIMARY_ORDER[sources[r[0]].kind], r[6]))
-            source_id, _, url, title, summary, discussion_url, published_at = group[0]
+            source_id, _, url, title, summary, discussion_url, published_at, score, comments = group[0]
             primary = sources[source_id]
             also_on = tuple(dict.fromkeys(sources[r[0]].name for r in group[1:] if r[0] != source_id))
+            # Counts and the discussion link come from the busiest discussion of the story.
+            counted = [r for r in group if r[7] is not None or r[8] is not None]
+            if counted:
+                busiest = max(counted, key=lambda r: ((r[8] or 0), (r[7] or 0)))
+                score, comments = busiest[7], busiest[8]
+                discussion_url = busiest[5] or discussion_url
             if not discussion_url:
                 discussion_url = next((r[5] for r in group if r[5]), None)
             articles.append(Article(
@@ -199,6 +219,8 @@ class Store:
                 published_at=datetime.fromisoformat(published_at),
                 also_on=also_on,
                 discussion_url=discussion_url,
+                score=score,
+                comments=comments,
                 summary=summary,
             ))
         return articles

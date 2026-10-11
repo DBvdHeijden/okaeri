@@ -86,3 +86,28 @@ def test_onboarding_submit_persists(store):
 def test_favicons():
     for path in ("/favicon.ico", "/static/favicon.svg", "/static/favicon-32.png", "/static/apple-touch-icon.png"):
         assert client.get(path).status_code == 200
+
+
+def test_counts_shown_with_comment_link(store):
+    store.set_selected(["hn"])
+    store.save_fetch("hn", [item("https://e.com/a", "Counted", score=1516, comments=1,
+                                 discussion_url="https://news.ycombinator.com/item?id=9")], None, None)
+    html = client.get("/").text
+    assert "1,516 points" in html
+    assert '<a href="https://news.ycombinator.com/item?id=9" rel="noopener">1 comment</a>' in html
+
+
+def tab_labels(html: str) -> list[str]:
+    return re.findall(r'<a href="/\?kind=\w+"[^>]*>(\w+)</a>', html)
+
+
+def test_tabs_only_for_followed_kinds(store):
+    seed(store)  # blog, forum, paper
+    html = client.get("/").text
+    assert tab_labels(html) == ["All", "Papers", "Blogs", "Forums"]
+    assert titles(client.get("/?kind=news").text) == titles(html)  # unfollowed kind falls back to all
+
+
+def test_no_tabs_for_single_kind(store):
+    store.set_selected(["simonw", "jvns"])
+    assert tab_labels(client.get("/").text) == []

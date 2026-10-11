@@ -59,15 +59,16 @@ SOURCES: list[Source] = [
     Source("hf-blog", "Hugging Face", "blog", "https://huggingface.co/blog/feed.xml", "huggingface.co/blog"),
     Source("cloudflare", "Cloudflare", "blog", "https://blog.cloudflare.com/rss/", "blog.cloudflare.com"),
     # Forums
-    Source("hn", "Hacker News", "forum", "https://news.ycombinator.com/rss", "news.ycombinator.com",
-           refresh_minutes=20),
-    Source("lobsters", "Lobsters", "forum", "https://lobste.rs/rss", "lobste.rs", refresh_minutes=30),
+    Source("hn", "Hacker News", "forum", "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30",
+           "news.ycombinator.com", fetcher="hn_algolia", refresh_minutes=20),
+    Source("lobsters", "Lobsters", "forum", "https://lobste.rs/hottest.json", "lobste.rs",
+           fetcher="lobsters_json", refresh_minutes=30),
     Source("r-ml", "r/MachineLearning", "forum", "https://www.reddit.com/r/MachineLearning/.rss",
            "reddit.com/r/MachineLearning", refresh_minutes=60),  # Reddit rate-limits (429) quickly
     Source("tildes-comp", "Tildes ~comp", "forum", "https://tildes.net/~comp/topics.rss", "tildes.net/~comp",
            refresh_minutes=30),
-    Source("alignmentforum", "Alignment Forum", "forum", "https://www.alignmentforum.org/feed.xml",
-           "alignmentforum.org"),
+    Source("alignmentforum", "Alignment Forum", "forum", "https://www.alignmentforum.org/graphql",
+           "alignmentforum.org", fetcher="lw_graphql"),
     # News
     Source("quanta", "Quanta", "news", "https://www.quantamagazine.org/feed/", "quantamagazine.org"),
     Source("science-news", "Science News", "news", "https://www.science.org/rss/news_current.xml",
