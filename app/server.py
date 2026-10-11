@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -25,8 +26,6 @@ HERE = Path(__file__).parent
 PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 SAMPLE_SIZE = 20
 
-ALL = ("all", "All")  # always the first tab
-HISTORY = ("history", "History")  # always the last tab, aligned right
 FORMAT_GROUPS = {"paper": "Papers", "blog": "Blogs", "forum": "Forums", "news": "News"}  # onboarding sections
 
 
@@ -86,19 +85,16 @@ templates.env.globals["format_of"] = format_of
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, tab: str = "all", n: Annotated[int, Query(ge=1)] = PAGE_SIZE):
+def home(request: Request, tab: str = "", n: Annotated[int, Query(ge=1)] = PAGE_SIZE):
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     if not selected:
         return RedirectResponse("/onboarding", status_code=303)
-    user_tabs = settings.tabs()
-    active = next((t for t in user_tabs if t["slug"] == tab), None)
-    if tab == "history":
+    tabs = settings.tabs()
+    active = next((t for t in tabs if t["slug"] == tab), tabs[0])  # the first tab is the default
+    if active["history"]:
         ranked = store().history(BY_ID)  # chronological by design; not a recommendation, so not ranked
     else:
-        tab = active["slug"] if active else "all"
-        pool = store().articles(selected)
-        if active:
-            pool = [a for a in pool if in_tab(a, active["tags"])]
+        pool = [a for a in store().articles(selected) if in_tab(a, active["tags"])]
         ranked = rank(pool, store().events(), settings.load())
     return templates.TemplateResponse(
         request,
@@ -108,8 +104,8 @@ def home(request: Request, tab: str = "all", n: Annotated[int, Query(ge=1)] = PA
             "more": len(ranked) > n,
             "n": n,
             "page_size": PAGE_SIZE,
-            "tab": tab,
-            "tabs": [ALL, *((t["slug"], t["name"]) for t in user_tabs), HISTORY],
+            "tab": active,
+            "tabs": tabs,
             "pending": store().pending(selected),
             "today": datetime.now().strftime("%A, %-d %B"),
         },
@@ -152,14 +148,59 @@ def favicon():
     return FileResponse(HERE / "static" / "favicon-32.png", media_type="image/png")
 
 
-# Onboarding, also the settings page: interests, then sources, then a sample of stories to seed ranking.
+def wake_refresher(request: Request) -> None:
+    if refresher := getattr(request.app.state, "refresher", None):
+        refresher.wake.set()
+
+
+# Settings: the sources you follow, and a way back into onboarding. Onboarding is only for when nothing is picked yet.
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    enabled = settings.enabled_sources()
+    if not enabled:
+        return RedirectResponse("/onboarding", status_code=303)
+    groups = [
+        (label, sorted((s for s in SOURCES if source_format(s) == f), key=lambda s: s.id not in enabled))
+        for f, label in FORMAT_GROUPS.items()
+    ]
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        {
+            "groups": groups,
+            "selected": enabled,
+            "tabs": settings.all_tabs(),
+            "tag_groups": [sorted(TOPICS), list(FORMAT_GROUPS)],
+            "max_tabs": settings.MAX_TABS,
+        },
+    )
+
+
+@app.post("/settings")
+def settings_submit(
+    request: Request,
+    sources: Annotated[list[str] | None, Form()] = None,
+    tabs: Annotated[str | None, Form()] = None,  # JSON from the tab editor; absent without JS
+):
+    settings.set_enabled_sources([i for i in sources or [] if i in BY_ID])
+    if tabs is not None:
+        settings.set_tabs(json.loads(tabs))
+    wake_refresher(request)
+    return RedirectResponse("/", status_code=303)
+
+
+# Onboarding: interests, then sources, then a sample of stories to seed ranking.
 
 def source_count(tag: str) -> int:
     return sum(tag in s.tags for s in SOURCES)
 
 
 @app.get("/onboarding", response_class=HTMLResponse)
-def onboarding_interests(request: Request):
+def onboarding_interests(request: Request, redo: bool = False):
+    # A redo starts from your current answers; nothing changes until you submit each step.
+    if settings.enabled_sources() and not redo:
+        return RedirectResponse("/settings", status_code=303)
     groups = [
         ("Fields", "topics", [(t, t, source_count(t)) for t in sorted(TOPICS)]),
         ("Formats", "formats", [(f, label, source_count(f)) for f, label in FORMAT_GROUPS.items()]),
@@ -195,8 +236,7 @@ def onboarding_sources_submit(request: Request, sources: Annotated[list[str] | N
     chosen = [i for i in sources or [] if i in BY_ID]
     settings.set_enabled_sources(chosen)
     log.info("selected %d sources", len(chosen))
-    if refresher := getattr(request.app.state, "refresher", None):
-        refresher.wake.set()
+    wake_refresher(request)
     return RedirectResponse("/onboarding/sample", status_code=303)
 
 

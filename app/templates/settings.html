@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Settings · okaeri{% endblock %}
+{% block actions %}
+  <a class="icon-btn" href="/" aria-label="Back to feed">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+  </a>
+{% endblock %}
+{% macro tab_row(t) %}
+<li class="tab-row{% if t.hidden %} is-hidden{% endif %}" data-tab-row{% if t.builtin %} data-builtin="{{ t.slug }}"{% endif %}>
+  <div class="tab-row-head">
+    <span class="tab-title" data-tab-title>{{ t.name }}</span>
+    <span class="tab-summary" data-tab-summary>
+      {%- if t.history %}Links you opened{% elif t.tags %}{{ t.tags | join(" · ") }}{% else %}Everything{% endif -%}
+    </span>
+    <button type="button" class="link-btn" data-hide-tab>{{ "Show" if t.hidden else "Hide" }}</button>
+    {% if not t.builtin %}<button type="button" class="link-btn" data-edit-tab>Edit</button>{% endif %}
+  </div>
+  {% if not t.builtin %}
+  <div class="tab-editor" data-tab-editor hidden>
+    <input class="tab-name" type="text" value="{{ t.name }}" placeholder="Tab name" maxlength="24"
+           aria-label="Tab name" data-tab-name>
+    <div class="tags">
+      {% for group in tag_groups %}
+      <span class="tag-group">
+        {% for tag in group %}
+        <label class="tag"><input type="checkbox" class="tag-check" value="{{ tag }}" {% if tag in t.tags %}checked{% endif %}><span>{{ tag }}</span></label>
+        {% endfor %}
+      </span>
+      {% endfor %}
+    </div>
+    <p class="hint">Stories with any picked topic, and any picked format if you pick some. No tags shows everything.</p>
+    <button type="button" class="link-btn" data-remove-tab>Delete tab</button>
+  </div>
+  {% endif %}
+</li>
+{% endmacro %}
+{% block content %}
+<header class="masthead">
+  <div>
+    <p class="kicker" lang="ja">設定</p>
+    <h1>Settings</h1>
+    <p class="date">Following {{ selected | length | count("source") }} · <a href="/onboarding?redo=1">Redo onboarding</a></p>
+  </div>
+</header>
+
+<form method="post" action="/settings" class="folds" data-onboarding>
+  <details class="fold" data-tabs data-max="{{ max_tabs }}">
+    <summary>
+      <span class="fold-label">Tabs</span>
+      <span class="fold-count" data-tabs-count>{{ tabs | rejectattr("hidden") | list | length }} shown</span>
+    </summary>
+    <ul class="tab-list" data-tab-list>
+      {% for t in tabs %}{{ tab_row(t) }}{% endfor %}
+    </ul>
+    <template data-tab-template>{{ tab_row({"name": "", "tags": []}) }}</template>
+    <button type="button" class="link-btn add-tab" data-add-tab>+ New tab</button>
+    <input type="hidden" name="tabs">
+  </details>
+
+  <details class="fold">
+    <summary>
+      <span class="fold-label">Sources</span>
+      <span class="fold-count" data-selected-count>0 selected</span>
+    </summary>
+    <label class="search">
+      <span class="visually-hidden">Search sources</span>
+      <input type="search" placeholder="Search sources" autocomplete="off" data-source-search>
+    </label>
+    <div class="subfolds">
+      {% for label, sources in groups %}
+      <details class="fold" data-group>
+        <summary>
+          <span class="fold-label">{{ label }}</span>
+          <span class="fold-count" data-group-count>{{ sources | selectattr("id", "in", selected) | list | length }} of {{ sources | length }}</span>
+        </summary>
+        <ul class="sources">
+          {% for s in sources %}
+          <li>
+            <label class="source" data-name="{{ (s.name ~ ' ' ~ s.description ~ ' ' ~ s.site) | lower }}">
+              <span class="source-text">
+                <span class="source-name">{{ s.name }} <span class="source-site">{{ s.site }}</span></span>
+                <span class="source-desc">{{ s.description }}</span>
+              </span>
+              <input type="checkbox" class="check" aria-label="{{ s.name }}" name="sources" value="{{ s.id }}" {% if s.id in selected %}checked{% endif %}>
+            </label>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endfor %}
+      <p class="empty" hidden data-no-results>No sources match.</p>
+    </div>
+  </details>
+
+  <div class="footer-bar">
+    <span></span>
+    <button type="submit" class="primary-btn">Save</button>
+  </div>
+</form>
+{% endblock %}

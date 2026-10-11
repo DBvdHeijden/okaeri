@@ -121,6 +121,8 @@ h1 {
   margin: 2px 0 0;
   color: var(--muted);
 }
+.date a { color: inherit; text-underline-offset: 3px; }
+.date a:hover { color: var(--text); }
 
 .icon-btn {
   display: inline-grid;
@@ -161,7 +163,7 @@ h1 {
 .tabs a:hover { color: var(--text); background: var(--chip); }
 .tabs a[aria-current="page"] { color: var(--text); font-weight: 500; }
 .tabs a[aria-current="page"]:hover { background: none; }
-.tabs a[data-tab="history"] { margin-left: auto; }
+.tabs a[data-history]:last-child { margin-left: auto; }
 
 /* Feed */
 
@@ -320,6 +322,95 @@ h1 {
   letter-spacing: 0.06em;
   color: var(--muted);
 }
+
+/* Settings: collapsible sections (Tabs, Sources, and a nested one per format), closed on load */
+
+.folds { margin-top: 32px; }
+
+.fold { border-bottom: 1px solid var(--line); }
+.folds > .fold:first-of-type { border-top: 1px solid var(--line); }
+.fold[hidden] { display: none; }
+
+.fold summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  cursor: pointer;
+  list-style: none;
+}
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin: 0 4px 3px 0;
+  border: solid var(--muted);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+}
+.fold[open] > summary::after { transform: rotate(225deg); margin-bottom: -3px; }
+.fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+.fold-label { font-weight: 500; }
+.fold-count { margin-left: auto; font: 13px var(--mono); color: var(--muted); }
+
+.fold .sources { margin-bottom: 12px; }
+.fold .sources li:last-child { border-bottom: 0; }
+
+/* Nested format sections sit indented inside Sources */
+.subfolds { margin: 8px 0 12px 16px; }
+.subfolds .fold:first-of-type { border-top: 1px solid var(--line); }
+.subfolds .fold:last-of-type { border-bottom: 0; }
+.subfolds .fold-label { font-weight: 400; }
+
+.tab-list { list-style: none; margin: 0; padding: 0; }
+.tab-row { border-top: 1px solid var(--line); }
+.tab-row-head { display: flex; align-items: center; gap: 12px; min-height: 48px; padding-left: 16px; }
+.tab-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mono); color: var(--muted); }
+.tab-row-head .link-btn { color: var(--muted); font-size: 14px; }
+.tab-row-head .link-btn:hover { color: var(--text); }
+.tab-row.is-hidden .tab-title, .tab-row.is-hidden .tab-summary { opacity: 0.45; }
+
+.tab-editor { padding: 0 0 12px 16px; }
+.tab-editor[hidden] { display: none; }
+.tab-name {
+  width: 100%;
+  min-height: 40px;
+  margin-bottom: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.tab-name::placeholder { color: var(--muted); }
+.tab-name:focus-visible { border-color: var(--accent); outline: none; }
+.tab-editor .hint { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.tab-editor [data-remove-tab] { margin-left: -4px; color: var(--muted); font-size: 14px; }
+
+.tags { display: flex; flex-wrap: wrap; column-gap: 16px; }
+.tag-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { position: relative; display: inline-flex; align-items: center; min-height: 36px; cursor: pointer; }
+.tag-check { position: absolute; opacity: 0; pointer-events: none; }
+.tag span {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font: 12px var(--mono);
+  color: var(--muted);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.tag:hover span { border-color: var(--muted); }
+.tag-check:checked + span { background: var(--text); border-color: var(--text); color: var(--bg); }
+.tag-check:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.add-tab { margin: 0 0 8px 12px; }
+.add-tab[hidden] { display: none; }
+.fold > .search { display: block; margin: 0 0 4px; }
 
 .sources {
   list-style: none;

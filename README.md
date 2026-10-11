@@ -13,7 +13,7 @@ OKAERI_FETCH=0 uv run main.py      # don't fetch feeds
 OKAERI_DB=/tmp/x.db uv run main.py # default: data/okaeri.db
 ```
 
-On first run you're sent to onboarding: pick fields and formats, then sources, then tick a few sample stories you'd read (saved as seed events for ranking). Nothing is fetched until you pick sources.
+On first run you're sent to onboarding: pick fields and formats, then sources, then tick a few sample stories you'd read (saved as seed events for ranking). Nothing is fetched until you pick sources. Afterwards the gear opens Settings, where you change which sources you follow or redo onboarding from your current answers.
 
 ## Test
 
@@ -34,7 +34,7 @@ uv run scripts/make_favicon.py
 - `main.py`: starts uvicorn on 127.0.0.1:12362, one worker.
 - `catalog/sources.json`: the curated source catalog.
 - `catalog/tags.json`: the tag vocabulary: formats (paper, blog, forum, news) and topics.
-- `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it. Tabs live here as `{"name", "tags"}`.
+- `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it. Tabs live here, edited from Settings: `{"builtin": "all"|"history", "hidden"}` or custom `{"name", "tags", "hidden"}` (no tags shows everything). All is always first and History last.
 - `data/`: the SQLite database (gitignored).
 - `app/server.py`: routes. Every article list passes through `rank()`.
 - `app/rank.py`: the ranking seam. It currently sorts by recency.

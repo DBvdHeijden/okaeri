@@ -128,18 +128,84 @@
   // Web fonts change row heights; re-fit once they're in.
   document.fonts?.ready.then(() => paging?.paginate());
 
-  // Onboarding
+  // Settings: tabs. All and History can only be hidden; custom tabs can also be edited.
+  // On save the rows become the "tabs" JSON in settings.json.
+  const tabsEditor = document.querySelector("[data-tabs]");
+  if (tabsEditor) {
+    const list = tabsEditor.querySelector("[data-tab-list]");
+    const addBtn = tabsEditor.querySelector("[data-add-tab]");
+    const rows = () => [...list.querySelectorAll("[data-tab-row]")];
+    const tagsOf = (row) => [...row.querySelectorAll(".tag-check:checked")].map((c) => c.value);
+    const update = () => {
+      const custom = rows().filter((row) => !row.dataset.builtin);
+      addBtn.hidden = custom.length >= Number(tabsEditor.dataset.max);
+      const shown = rows().filter((row) => !row.classList.contains("is-hidden")).length;
+      tabsEditor.querySelector("[data-tabs-count]").textContent = `${shown} shown`;
+      for (const row of custom) {
+        row.querySelector("[data-tab-title]").textContent = row.querySelector("[data-tab-name]").value.trim() || "New tab";
+        row.querySelector("[data-tab-summary]").textContent = tagsOf(row).join(" · ") || "Everything";
+      }
+    };
+    const toggleEditor = (row) => {
+      const editor = row.querySelector("[data-tab-editor]");
+      editor.hidden = !editor.hidden;
+      row.querySelector("[data-edit-tab]").textContent = editor.hidden ? "Edit" : "Done";
+      if (!editor.hidden) row.querySelector("[data-tab-name]").focus();
+    };
+
+    list.addEventListener("click", (e) => {
+      const row = e.target.closest("[data-tab-row]");
+      if (e.target.closest("[data-hide-tab]")) {
+        const hidden = row.classList.toggle("is-hidden");
+        e.target.textContent = hidden ? "Show" : "Hide";
+      } else if (e.target.closest("[data-edit-tab]")) {
+        toggleEditor(row);
+      } else if (e.target.closest("[data-remove-tab]")) {
+        row.remove();
+      } else {
+        return;
+      }
+      update();
+    });
+    list.addEventListener("input", update);
+    addBtn.addEventListener("click", () => {
+      // New custom tabs go before History, which stays last.
+      const row = tabsEditor.querySelector("[data-tab-template]").content.firstElementChild.cloneNode(true);
+      list.insertBefore(row, list.querySelector('[data-builtin="history"]'));
+      toggleEditor(row);
+      update();
+    });
+    update();
+
+    tabsEditor.closest("form").addEventListener("submit", () => {
+      tabsEditor.querySelector("[name=tabs]").value = JSON.stringify(rows().map((row) => ({
+        builtin: row.dataset.builtin,
+        name: row.querySelector("[data-tab-name]")?.value.trim(),
+        tags: tagsOf(row),
+        hidden: row.classList.contains("is-hidden"),
+      })));
+    });
+  }
+
+  // Onboarding and settings
   const form = document.querySelector("[data-onboarding]");
   if (form) {
     const count = form.querySelector("[data-selected-count]");
     const updateCount = () => {
       const n = form.querySelectorAll(".check:checked").length;
       count.textContent = `${n} selected`;
+      for (const group of form.querySelectorAll("[data-group]")) {
+        const label = group.querySelector("[data-group-count]");
+        if (label) label.textContent =
+          `${group.querySelectorAll(".check:checked").length} of ${group.querySelectorAll(".check").length}`;
+      }
     };
     form.addEventListener("change", updateCount);
     updateCount();
 
     const search = document.querySelector("[data-source-search]");
+    // Enter in the search box filters; it shouldn't submit the settings form around it.
+    search?.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
     const noResults = form.querySelector("[data-no-results]");
     search?.addEventListener("input", () => {
       const q = search.value.trim().toLowerCase();
@@ -152,6 +218,8 @@
           if (match) visible++;
         }
         group.hidden = visible === 0;
+        // Collapsible sections open while searching, so matches are visible; close again when cleared.
+        if (group.tagName === "DETAILS") group.open = q !== "" && visible > 0;
         any ||= visible > 0;
       }
       noResults.hidden = any;

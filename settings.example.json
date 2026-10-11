@@ -7,10 +7,12 @@
     "enabled": []
   },
   "tabs": [
-    {"name": "AI", "tags": ["ai"]},
-    {"name": "Papers", "tags": ["paper"]},
-    {"name": "Science", "tags": ["science", "physics", "math"]},
-    {"name": "Tech", "tags": ["software", "tech"]},
-    {"name": "World", "tags": ["world"]}
+    {"builtin": "all", "hidden": false},
+    {"name": "AI", "tags": ["ai"], "hidden": false},
+    {"name": "Papers", "tags": ["paper"], "hidden": false},
+    {"name": "Science", "tags": ["science", "physics", "math"], "hidden": false},
+    {"name": "Tech", "tags": ["software", "tech"], "hidden": false},
+    {"name": "World", "tags": ["world"], "hidden": false},
+    {"builtin": "history", "hidden": false}
   ]
 }

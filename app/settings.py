@@ -6,13 +6,15 @@ import re
 import shutil
 
 from app import ROOT
-from app.sources import known_tags
+from app.sources import FORMATS, TOPICS, known_tags
 
 log = logging.getLogger("okaeri")
 
 PATH = ROOT / "settings.json"
 EXAMPLE = ROOT / "settings.example.json"
-MAX_TABS = 6
+MAX_TABS = 6  # custom tabs, besides All and History
+ALL_TAB = {"name": "All", "slug": "all", "tags": (), "history": False, "builtin": True}
+HISTORY_TAB = {"name": "History", "slug": "history", "tags": (), "history": True, "builtin": True}
 
 
 def load() -> dict:
@@ -34,15 +36,34 @@ def slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-def tabs() -> list[dict]:
-    """The user's tabs as {name, slug, tags}; "All" and "History" are added by the page."""
-    tabs = load()["tabs"]
-    if len(tabs) > MAX_TABS:
-        log.warning("showing the first %d tabs; ignoring %s", MAX_TABS, [t["name"] for t in tabs[MAX_TABS:]])
-    return [
-        {"name": t["name"], "slug": slug(t["name"]), "tags": known_tags(t["tags"], f"tab {t['name']!r}")}
-        for t in tabs[:MAX_TABS]
+def all_tabs() -> list[dict]:
+    """Every tab in order, hidden ones included: All, the custom tabs, History."""
+    stored = load()["tabs"]
+    builtin_hidden = {t["builtin"]: t["hidden"] for t in stored if "builtin" in t}
+    custom = [t for t in stored if "builtin" not in t]
+    if len(custom) > MAX_TABS:
+        log.warning("showing the first %d tabs; ignoring %s", MAX_TABS, [t["name"] for t in custom[MAX_TABS:]])
+    custom = [
+        {
+            "name": t["name"],
+            "slug": slug(t["name"]),
+            "tags": known_tags(t["tags"], f"tab {t['name']!r}"),
+            "history": False,
+            "builtin": False,
+            "hidden": t.get("hidden", False),
+        }
+        for t in custom[:MAX_TABS]
     ]
+    return [
+        {**ALL_TAB, "hidden": builtin_hidden.get("all", False)},
+        *custom,
+        {**HISTORY_TAB, "hidden": builtin_hidden.get("history", False)},
+    ]
+
+
+def tabs() -> list[dict]:
+    """The visible tabs. No tags means everything; the history tab lists opened links."""
+    return [t for t in all_tabs() if not t["hidden"]] or [ALL_TAB]
 
 
 def interests() -> dict:
@@ -58,4 +79,24 @@ def set_interests(formats: list[str], topics: list[str]) -> None:
 def set_enabled_sources(source_ids: list[str]) -> None:
     settings = load()
     settings["sources"]["enabled"] = source_ids
+    save(settings)
+
+
+def set_tabs(rows: list[dict]) -> None:
+    """Rows from the settings page: custom tabs need a unique name; All and History can only be hidden."""
+    builtin_hidden = {row["builtin"]: bool(row.get("hidden")) for row in rows if row.get("builtin") in ("all", "history")}
+    taken, custom = {"all", "history"}, []
+    for row in rows:
+        name = str(row.get("name") or "").strip()
+        if row.get("builtin") or not slug(name) or slug(name) in taken:
+            continue
+        taken.add(slug(name))
+        tags = [t for t in row.get("tags", []) if t in FORMATS | TOPICS]
+        custom.append({"name": name, "tags": tags, "hidden": bool(row.get("hidden"))})
+    settings = load()
+    settings["tabs"] = [
+        {"builtin": "all", "hidden": builtin_hidden.get("all", False)},
+        *custom[:MAX_TABS],
+        {"builtin": "history", "hidden": builtin_hidden.get("history", False)},
+    ]
     save(settings)
