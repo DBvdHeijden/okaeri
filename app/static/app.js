@@ -11,7 +11,7 @@
       const next = currentTheme() === "dark" ? "light" : "dark";
       const apply = () => {
         root.dataset.theme = next;
-        try { localStorage.setItem("theme", next); } catch (e) {}
+        document.cookie = `theme=${next}; path=/; max-age=31536000; samesite=lax`;
       };
       const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (!document.startViewTransition || reduced) return apply();

@@ -1,5 +1,6 @@
 <!doctype html>
-<html lang="en">
+{% set theme = request.cookies.get("theme") -%}
+<html lang="en"{% if theme in ("light", "dark") %} data-theme="{{ theme }}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,10 +9,6 @@
   <link rel="icon" href="{{ url_for('static', path='favicon-32.png') }}" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="{{ url_for('static', path='apple-touch-icon.png') }}">
   {% block head %}{% endblock %}
-  <script>
-    document.documentElement.classList.add("js");
-    try { var t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
-  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@500&display=swap">
