@@ -82,6 +82,11 @@ def load_embedder() -> Embedder:
     return embed
 
 
+def model_downloaded() -> bool:
+    # The download lands in a temporary file and is moved here when complete.
+    return (MODEL_DIR / "onnx" / "model_quantized.onnx_data").exists()
+
+
 def document(article: Article) -> str:
     if not article.summary:
         return f"title: none | text: {article.title}"

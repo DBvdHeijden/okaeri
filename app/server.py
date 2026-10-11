@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import settings
+from app.embed import model_downloaded, pending
 from app.fetch import Refresher
 from app.models import Article
 from app.rank import rank, sample
@@ -108,8 +109,24 @@ def home(request: Request, tab: str = "", n: Annotated[int, Query(ge=1)] = PAGE_
             "tabs": tabs,
             "pending": store().pending(selected),
             "today": datetime.now().strftime("%A, %-d %B"),
+            "progress": background_work(request),
         },
     )
+
+
+def background_work(request: Request) -> str:
+    """What the embedding child is doing, shown next to the date; empty when nothing runs."""
+    refresher = getattr(request.app.state, "refresher", None)
+    if not (refresher and refresher.embedding):
+        return ""
+    if not model_downloaded():
+        return "downloading the language model (~330 MB, one time)…"
+    return f"indexing articles in the background: {len(pending(store())):,} to go"
+
+
+@app.get("/progress", response_class=PlainTextResponse)
+def progress(request: Request) -> str:
+    return background_work(request)
 
 
 def find_article(id: str) -> Article:

@@ -281,6 +281,7 @@ class Refresher:
         self.catalogue = catalogue
         self.wake = asyncio.Event()
         self.embed_failed_at = -EMBED_RETRY_SECONDS  # time.monotonic() of the last failed embed
+        self.embedding = False  # a child is running; the homepage says so
 
     async def run(self) -> None:
         while True:
@@ -305,12 +306,14 @@ class Refresher:
         if not await asyncio.to_thread(pending, self.store):
             return
         child = await asyncio.create_subprocess_exec(sys.executable, "-m", "app.embed", cwd=ROOT)
+        self.embedding = True
         try:
             await asyncio.wait_for(child.wait(), EMBED_TIMEOUT_SECONDS)
             result = "ok" if child.returncode == 0 else f"failed (exit code {child.returncode})"
         except TimeoutError:
             result = f"timed out after {EMBED_TIMEOUT_SECONDS // 60} minutes"
         finally:
+            self.embedding = False
             if child.returncode is None:  # timed out, or the server is stopping
                 child.kill()
         await asyncio.to_thread(self.store.save_embed_run, result)
