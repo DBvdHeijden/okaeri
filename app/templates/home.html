@@ -27,11 +27,10 @@
 </nav>
 {% endif %}
 
-<div class="feed-region" data-feed-region>
 {% if articles %}
 <ol class="feed">
   {% for a in articles %}
-  <li class="row">
+  <li class="row" id="item-{{ loop.index }}">
     <div class="row-body">
       <div class="row-text">
         <a class="title" href="/r/{{ a.id }}" target="_blank" rel="noopener">{{ a.title }}</a>
@@ -69,14 +68,7 @@
 <p class="empty">{% if kind == "history" %}Nothing opened yet.{% elif pending %}Fetching your sources…{% else %}Nothing new here in the last two weeks.{% endif %}</p>
 {% endif %}
 
-<nav class="pager" data-pager aria-label="Pages" hidden>
-  <button type="button" class="icon-btn" data-prev aria-label="Previous page">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-  </button>
-  <span class="page-num" data-page-num aria-live="polite"></span>
-  <button type="button" class="icon-btn" data-next aria-label="Next page">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-  </button>
-</nav>
-</div>
+{% if more %}
+<nav class="pager"><a class="link-btn" href="/?kind={{ kind }}&amp;n={{ n + page_size }}#item-{{ n + 1 }}">Show more</a></nav>
+{% endif %}
 {% endblock %}

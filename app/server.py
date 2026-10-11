@@ -22,7 +22,7 @@ from app.store import Store, default_path, open_store
 log = logging.getLogger("okaeri")
 
 HERE = Path(__file__).parent
-MAX_ARTICLES = 100  # the client splits these into viewport-sized pages
+PAGE_SIZE = 30
 
 TABS = [("all", "All"), *KIND_LABELS.items()]
 HISTORY = ("history", "History")  # always the last tab, aligned right
@@ -84,7 +84,7 @@ templates.env.filters["count"] = count
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, kind: str = "all", n: Annotated[int, Query(ge=1)] = MAX_ARTICLES):
+def home(request: Request, kind: str = "all", n: Annotated[int, Query(ge=1)] = PAGE_SIZE):
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     if not selected:
         return RedirectResponse("/onboarding", status_code=303)
@@ -106,6 +106,9 @@ def home(request: Request, kind: str = "all", n: Annotated[int, Query(ge=1)] = M
         "home.html",
         {
             "articles": ranked[:n],
+            "more": len(ranked) > n,
+            "n": n,
+            "page_size": PAGE_SIZE,
             "kind": kind,
             "tabs": tabs,
             "pending": store().pending(selected),

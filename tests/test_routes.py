@@ -67,10 +67,15 @@ def test_routes_go_through_rank(store, monkeypatch):
     assert titles(client.get("/").text) == ["A paper", "Blog post", "Forum link"]
 
 
-def test_list_capped(store, monkeypatch):
+def test_show_more(store):
     settings.set_enabled_sources(["simonw"])
-    store.save_fetch("simonw", [item(f"https://simonwillison.net/{i}") for i in range(120)], None, None)
-    assert len(titles(client.get("/").text)) == server.MAX_ARTICLES
+    store.save_fetch("simonw", [item(f"https://simonwillison.net/{i}") for i in range(server.PAGE_SIZE + 5)], None, None)
+    html = client.get("/").text
+    assert len(titles(html)) == server.PAGE_SIZE
+    more = f'href="/?kind=all&amp;n={2 * server.PAGE_SIZE}#item-{server.PAGE_SIZE + 1}"'
+    assert more in html
+    html = client.get(f"/?n={2 * server.PAGE_SIZE}").text
+    assert len(titles(html)) == server.PAGE_SIZE + 5 and "Show more" not in html
 
 
 def test_onboarding_lists_sources_and_checks_selected(store):
