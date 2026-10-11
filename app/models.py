@@ -42,6 +42,13 @@ class FetchedItem:
 
 
 @dataclass(frozen=True)
+class Event:
+    type: Literal["seed", "click", "hide", "unhide"]
+    key: str
+    at: datetime
+
+
+@dataclass(frozen=True)
 class Article:
     """One story as shown on the homepage, merged across sources."""
 

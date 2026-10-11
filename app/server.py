@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -84,7 +84,7 @@ templates.env.filters["count"] = count
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, kind: str = "all"):
+def home(request: Request, kind: str = "all", n: Annotated[int, Query(ge=1)] = MAX_ARTICLES):
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     if not selected:
         return RedirectResponse("/onboarding", status_code=303)
@@ -100,12 +100,12 @@ def home(request: Request, kind: str = "all"):
         ranked = store().history(BY_ID)  # chronological by design; not a recommendation, so not ranked
     else:
         pool = [a for a in store().articles(selected) if kind == "all" or a.kind == kind]
-        ranked = rank(pool)
+        ranked = rank(pool, store().events(), settings.load())
     return templates.TemplateResponse(
         request,
         "home.html",
         {
-            "articles": ranked[:MAX_ARTICLES],
+            "articles": ranked[:n],
             "kind": kind,
             "tabs": tabs,
             "pending": store().pending(selected),

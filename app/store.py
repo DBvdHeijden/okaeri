@@ -11,7 +11,7 @@ from functools import cache
 from pathlib import Path
 
 from app import ROOT
-from app.models import KINDS, MAX_AGE_DAYS, Article, FetchedItem, Source
+from app.models import KINDS, MAX_AGE_DAYS, Article, Event, FetchedItem, Source
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -185,6 +185,11 @@ class Store:
     def add_event(self, type: str, key: str) -> None:
         with self._conn() as db:
             db.execute("INSERT INTO events (type, key, at) VALUES (?, ?, ?)", (type, key, _iso(datetime.now(UTC))))
+
+    def events(self) -> list[Event]:
+        with self._conn() as db:
+            rows = db.execute("SELECT type, key, at FROM events ORDER BY id").fetchall()
+        return [Event(type, key, datetime.fromisoformat(at)) for type, key, at in rows]
 
     def history(self, sources: dict[str, Source], limit: int = 100) -> list[Article]:
         """Opened stories, most recently opened first; each story once.
