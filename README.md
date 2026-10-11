@@ -23,7 +23,7 @@ uv run pytest
 
 ## Embeddings (experiment)
 
-After each refresh, new feed items (and anything you clicked, hid or seeded) are embedded with [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), run locally: the 270M text model, 8-bit ONNX from [onnx-community/embeddinggemma-2-ONNX](https://huggingface.co/onnx-community/embeddinggemma-2-ONNX), pinned to a revision and downloaded on first use into `data/models/` (~330 MB). Vectors are cut to 256 dims and stored in SQLite. Ranking doesn't use them yet. The model is licensed under the [Apache License 2.0](https://ai.google.dev/gemma/docs/gemma_4_license) (the linked page is the plain Apache 2.0 text, not the Gemma Terms of Use).
+New feed items (and anything you clicked, hid or seeded) are embedded by a short-lived background process, `python -m app.embed`, so the server never holds the model in memory. It uses [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), run locally: the 270M text model, 8-bit ONNX from [onnx-community/embeddinggemma-2-ONNX](https://huggingface.co/onnx-community/embeddinggemma-2-ONNX), pinned to a revision and downloaded on first use into `data/models/` (~330 MB). Vectors are cut to 256 dims and stored in SQLite. Ranking doesn't use them yet. The model is licensed under the [Apache License 2.0](https://ai.google.dev/gemma/docs/gemma_4_license) (the linked page is the plain Apache 2.0 text, not the Gemma Terms of Use).
 
 Try them out:
 

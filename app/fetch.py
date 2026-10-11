@@ -8,6 +8,8 @@ import asyncio
 import html
 import logging
 import re
+import sys
+import time
 from collections import defaultdict
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -17,8 +19,8 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 import feedparser
 import httpx
 
-from app import settings
-from app.embed import embed_new, load_embedder
+from app import ROOT, settings
+from app.embed import pending
 from app.models import MAX_AGE_DAYS, FetchedItem, Source
 from app.store import Store
 
@@ -30,6 +32,8 @@ MAX_AGE = timedelta(days=max(MAX_AGE_DAYS.values()))  # per-format limits are ap
 CONCURRENCY = 8
 HOST_INTERVAL = {"export.arxiv.org": 3.0}  # arXiv API asks for >= 3s between requests
 TICK_SECONDS = 60
+EMBED_TIMEOUT_SECONDS = 600
+EMBED_RETRY_SECONDS = 1800  # after a failure; each try loads a ~1.3 GB child, so not every minute
 
 # --- normalisation -----------------------------------------------------------
 
@@ -276,7 +280,7 @@ class Refresher:
         self.store = store
         self.catalogue = catalogue
         self.wake = asyncio.Event()
-        self.embedder = None  # loaded on the first cycle, so startup never waits for the model
+        self.embed_failed_at = -EMBED_RETRY_SECONDS  # time.monotonic() of the last failed embed
 
     async def run(self) -> None:
         while True:
@@ -284,7 +288,7 @@ class Refresher:
                 selected = [self.catalogue[i] for i in settings.enabled_sources() if i in self.catalogue]
                 if due := await asyncio.to_thread(self.store.due, selected):
                     await refresh(self.store, due)
-                # Every cycle, not just after a fetch: the first one embeds the backlog and a failed load is retried.
+                # Every cycle, not just after a fetch, so the backlog is embedded at startup.
                 await self.embed()
             except Exception:
                 log.exception("refresh cycle failed")
@@ -295,10 +299,19 @@ class Refresher:
             self.wake.clear()
 
     async def embed(self) -> None:
-        if self.embedder is None:
-            try:
-                self.embedder = await asyncio.to_thread(load_embedder)
-            except Exception:
-                log.exception("could not load the embedding model; retrying next cycle")
-                return
-        await asyncio.to_thread(embed_new, self.store, self.embedder)
+        """Embed pending items in a child process; it logs to our stderr and takes the model's memory with it."""
+        if time.monotonic() - self.embed_failed_at < EMBED_RETRY_SECONDS:
+            return
+        if not await asyncio.to_thread(pending, self.store):
+            return
+        child = await asyncio.create_subprocess_exec(sys.executable, "-m", "app.embed", cwd=ROOT)
+        try:
+            await asyncio.wait_for(child.wait(), EMBED_TIMEOUT_SECONDS)
+        except TimeoutError:
+            log.warning("embedding took over %d minutes; stopped it", EMBED_TIMEOUT_SECONDS // 60)
+        finally:
+            if child.returncode is None:  # timed out, or the server is stopping
+                child.kill()
+        if child.returncode != 0:
+            log.warning("embedding failed; next try in %d minutes", EMBED_RETRY_SECONDS // 60)
+            self.embed_failed_at = time.monotonic()
