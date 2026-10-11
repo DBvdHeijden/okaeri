@@ -54,7 +54,9 @@ def load_embedder() -> Embedder:
     try:
         path = download(local_files_only=True)  # no Hub lookup when we have it, so it works offline
     except LocalEntryNotFoundError:
+        log.info("downloading the embedding model, ~330 MB, one time")
         path = download()
+        log.info("downloaded the embedding model to %s", path)
     options = ort.SessionOptions()
     options.intra_op_num_threads = 2  # a background job: never take every core
     options.inter_op_num_threads = 1
