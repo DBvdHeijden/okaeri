@@ -22,6 +22,14 @@ On first run you're sent to onboarding to pick sources; nothing is fetched until
 uv run pytest
 ```
 
+## Favicon
+
+The favicons are drawn from the same Lorenz attractor as the homepage. Regenerate them with:
+
+```sh
+uv run scripts/make_favicon.py
+```
+
 ## Layout
 
 - `okaeri/server.py`: routes. Every article list passes through `rank()`.

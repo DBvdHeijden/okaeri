@@ -8,7 +8,7 @@ from typing import Annotated
 
 import uvicorn
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -82,6 +82,12 @@ def home(request: Request, kind: str = "all"):
             "today": datetime.now().strftime("%A, %-d %B"),
         },
     )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    # Some browsers ask for /favicon.ico regardless of the <link> tags.
+    return FileResponse(HERE / "static" / "favicon-32.png", media_type="image/png")
 
 
 @app.get("/onboarding", response_class=HTMLResponse)

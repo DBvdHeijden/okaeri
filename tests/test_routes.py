@@ -81,3 +81,8 @@ def test_onboarding_submit_persists(store):
     r = client.post("/onboarding", data={"sources": ["hn", "arxiv-cs.lg", "bogus"]}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/"
     assert store.selected() == {"hn", "arxiv-cs.lg"}
+
+
+def test_favicons():
+    for path in ("/favicon.ico", "/static/favicon.svg", "/static/favicon-32.png", "/static/apple-touch-icon.png"):
+        assert client.get(path).status_code == 200
