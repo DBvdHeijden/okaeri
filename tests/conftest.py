@@ -2,8 +2,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from okaeri.models import FetchedItem
-from okaeri.store import Store, open_store
+from app.models import FetchedItem
+from app.store import Store, open_store
 
 
 @pytest.fixture
@@ -14,7 +14,7 @@ def store(tmp_path, monkeypatch) -> Store:
 
 
 def item(url: str, title: str = "", hours_ago: float = 1, **kw) -> FetchedItem:
-    from okaeri.fetch import item_key
+    from app.fetch import item_key
 
     return FetchedItem(
         key=item_key(url),

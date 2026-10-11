@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from okaeri.fetch import (
+from app.fetch import (
     PER_SOURCE_LIMIT,
     item_key,
     parse_feed,
@@ -9,7 +9,7 @@ from okaeri.fetch import (
     parse_lobsters,
     parse_lw_graphql,
 )
-from okaeri.sources import BY_ID
+from app.sources import BY_ID
 
 NOW = datetime(2026, 10, 11, 12, tzinfo=UTC)
 

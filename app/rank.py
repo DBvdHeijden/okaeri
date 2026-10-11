@@ -5,7 +5,7 @@ For now this is plain recency; the local-embedder ranking replaces it later.
 
 from collections.abc import Sequence
 
-from okaeri.models import Article
+from app.models import Article
 
 
 def rank(articles: Sequence[Article]) -> list[Article]:

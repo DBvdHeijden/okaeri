@@ -17,8 +17,8 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 import feedparser
 import httpx
 
-from okaeri.models import MAX_AGE_DAYS, FetchedItem, Source
-from okaeri.store import Store
+from app.models import MAX_AGE_DAYS, FetchedItem, Source
+from app.store import Store
 
 log = logging.getLogger("okaeri.fetch")
 

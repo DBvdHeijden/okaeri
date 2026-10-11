@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from okaeri.sources import BY_ID
+from app.sources import BY_ID
 from tests.conftest import item
 
 
@@ -58,7 +58,7 @@ def test_counts_update_on_refetch(store):
 def test_migrates_old_schema(tmp_path):
     import sqlite3
 
-    from okaeri.store import Store
+    from app.store import Store
 
     path = tmp_path / "old.db"
     db = sqlite3.connect(path)

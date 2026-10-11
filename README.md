@@ -7,11 +7,10 @@ It fetches a curated set of science and tech feeds in the background and stores 
 ## Run
 
 ```sh
-uv run okaeri            # http://localhost:8000
-OKAERI_PORT=9000 uv run okaeri
-OKAERI_RELOAD=1 uv run okaeri   # auto-reload while editing
-OKAERI_FETCH=0 uv run okaeri    # don't fetch feeds
-OKAERI_DB=/tmp/x.db uv run okaeri  # default: ~/.local/share/okaeri/okaeri.db
+uv run main.py                     # http://127.0.0.1:12362
+OKAERI_RELOAD=1 uv run main.py     # auto-reload while editing
+OKAERI_FETCH=0 uv run main.py      # don't fetch feeds
+OKAERI_DB=/tmp/x.db uv run main.py # default: data/okaeri.db
 ```
 
 On first run you're sent to onboarding to pick sources; nothing is fetched until you do.
@@ -32,9 +31,12 @@ uv run scripts/make_favicon.py
 
 ## Layout
 
-- `okaeri/server.py`: routes. Every article list passes through `rank()`.
-- `okaeri/rank.py`: the ranking seam. It currently sorts by recency.
-- `okaeri/sources.py`: the curated source catalogue.
-- `okaeri/fetch.py`: feed parsing (RSS/Atom, HF papers), conditional GET, and the background refresher.
-- `okaeri/store.py`: SQLite: items, per-feed cache headers, and the selected sources.
-- `okaeri/templates/`, `okaeri/static/`: server-rendered HTML, CSS, and a little vanilla JS.
+- `main.py`: starts uvicorn on 127.0.0.1:12362, one worker.
+- `catalog/sources.json`: the curated source catalog.
+- `data/`: the SQLite database (gitignored).
+- `app/server.py`: routes. Every article list passes through `rank()`.
+- `app/rank.py`: the ranking seam. It currently sorts by recency.
+- `app/sources.py`: loads the catalog.
+- `app/fetch.py`: feed parsing (RSS/Atom, HF papers), conditional GET, and the background refresher.
+- `app/store.py`: SQLite: items, per-feed cache headers, and the selected sources.
+- `app/templates/`, `app/static/`: server-rendered HTML, CSS, and a little vanilla JS.

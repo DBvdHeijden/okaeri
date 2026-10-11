@@ -13,14 +13,13 @@ dependencies = [
     "uvicorn>=0.30",
 ]
 
-[project.scripts]
-okaeri = "okaeri.server:main"
-
 [dependency-groups]
 dev = [
     "pytest>=8",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

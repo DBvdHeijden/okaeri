@@ -6,7 +6,7 @@
 
     uv run scripts/make_favicon.py
 
-Writes okaeri/static/favicon.svg (adapts to light/dark tabs), favicon-32.png
+Writes app/static/favicon.svg (adapts to light/dark tabs), favicon-32.png
 and apple-touch-icon.png. Line thickness follows the hidden depth axis, as on
 the page.
 """
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-STATIC = Path(__file__).resolve().parent.parent / "okaeri" / "static"
+STATIC = Path(__file__).resolve().parent.parent / "app" / "static"
 
 SIGMA, RHO, BETA = 10.0, 28.0, 8.0 / 3.0
 DT = 0.005

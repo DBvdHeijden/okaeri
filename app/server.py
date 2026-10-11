@@ -7,17 +7,16 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlsplit
 
-import uvicorn
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from okaeri.fetch import Refresher
-from okaeri.models import KIND_LABELS, KINDS
-from okaeri.rank import rank
-from okaeri.sources import BY_ID, SOURCES
-from okaeri.store import Store, default_path, open_store
+from app.fetch import Refresher
+from app.models import KIND_LABELS, KINDS
+from app.rank import rank
+from app.sources import BY_ID, SOURCES
+from app.store import Store, default_path, open_store
 
 log = logging.getLogger("okaeri")
 
@@ -149,13 +148,3 @@ def onboarding_submit(request: Request, sources: Annotated[list[str] | None, For
         refresher.wake.set()
     return RedirectResponse("/", status_code=303)
 
-
-def main() -> None:
-    logging.basicConfig(level=logging.INFO)
-    uvicorn.run(
-        "okaeri.server:app",
-        host="127.0.0.1",
-        port=int(os.environ.get("OKAERI_PORT", "8000")),
-        reload=os.environ.get("OKAERI_RELOAD") == "1",
-        workers=1,
-    )

@@ -9,7 +9,8 @@ from datetime import UTC, datetime, timedelta
 from functools import cache
 from pathlib import Path
 
-from okaeri.models import KINDS, MAX_AGE_DAYS, Article, FetchedItem, Source
+from app import ROOT
+from app.models import KINDS, MAX_AGE_DAYS, Article, FetchedItem, Source
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -71,8 +72,7 @@ def _same_publisher(a: str, b: str) -> bool:
 def default_path() -> Path:
     if env := os.environ.get("OKAERI_DB"):
         return Path(env)
-    data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    return data_home / "okaeri" / "okaeri.db"
+    return ROOT / "data" / "okaeri.db"
 
 
 def _iso(dt: datetime) -> str:

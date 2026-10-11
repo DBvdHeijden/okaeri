@@ -2,8 +2,8 @@ import re
 
 from fastapi.testclient import TestClient
 
-from okaeri import server
-from okaeri.sources import SOURCES
+from app import server
+from app.sources import SOURCES
 from tests.conftest import item
 
 # No `with`: the lifespan (and so the background fetcher) does not run.
