@@ -422,7 +422,13 @@ h1 {
   h1 { font-size: 24px; }
 }
 
-/* Theme switch: a blind that drops down (to dark) or rolls up (to light). */
+/* Theme switch: a blind that drops down (to dark) or rolls up (to light).
+   A sliding mask with a 2px fade: reads as a hard edge, but anti-aliased so it doesn't step. */
+
+:root {
+  --blind-edge: 2px;
+  --blind-mask: linear-gradient(to bottom, #000 calc(100% - var(--blind-edge)), transparent);
+}
 
 :root[data-theme-transition]::view-transition-old(root),
 :root[data-theme-transition]::view-transition-new(root) {
@@ -430,23 +436,30 @@ h1 {
   mix-blend-mode: normal;
 }
 
+:root[data-theme-transition="down"]::view-transition-new(root),
+:root[data-theme-transition="up"]::view-transition-old(root) {
+  mask-image: var(--blind-mask);
+  mask-size: 100% calc(100% + var(--blind-edge));
+  mask-repeat: no-repeat;
+}
+
 :root[data-theme-transition="down"]::view-transition-new(root) {
-  animation: theme-drop 520ms cubic-bezier(0.65, 0, 0.35, 1);
+  animation: theme-drop 640ms cubic-bezier(0.45, 0, 0.2, 1) both;
 }
 
 :root[data-theme-transition="up"]::view-transition-old(root) {
   z-index: 1;
-  animation: theme-lift 520ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation: theme-lift 640ms cubic-bezier(0.45, 0, 0.2, 1) both;
 }
 
 @keyframes theme-drop {
-  from { clip-path: inset(0 0 100% 0); }
-  to   { clip-path: inset(0 0 0 0); }
+  from { mask-position: 0 calc(-100vh - var(--blind-edge)); }
+  to   { mask-position: 0 0; }
 }
 
 @keyframes theme-lift {
-  from { clip-path: inset(0 0 0 0); }
-  to   { clip-path: inset(0 0 100% 0); }
+  from { mask-position: 0 0; }
+  to   { mask-position: 0 calc(-100vh - var(--blind-edge)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

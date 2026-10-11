@@ -5,7 +5,7 @@
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
 
-  const SIGMA = 10, RHO = 28, BETA = 8 / 3;
+  const SIGMA = 10;
   const DT = 0.004;          // integration step
   const STEPS_PER_FRAME = 1; // speed of the particle
   const TRAIL = 10000;        // points kept in the trail
@@ -14,13 +14,25 @@
   const MIN_WIDTH = 0.5, MAX_WIDTH = 2.2; // px, far side → near side
   const WIDTH_LEVELS = 7;
   const DEPTH_RANGE = 28;    // attractor spans about ±28 along the hidden axis
+  const DRAW_EVERY = 2;      // draw every 2nd trail point: steps are only a few px apart
 
   let x = 0.1, y = 0, z = 0;
   const xs = new Float32Array(TRAIL), ys = new Float32Array(TRAIL), zs = new Float32Array(TRAIL);
   let head = 0, count = 0, angle = 0.6;
 
+  // rho and beta drift with wall-clock time, so the two focal points (the wing centres)
+  // wander visibly over a few minutes and carry on where they were after a reload.
+  // rho stays above ~26, where the wings would stop being chaotic and the particle spirals in.
+  let rho = 28, beta = 8 / 3;
+  function drift() {
+    const t = Date.now() / 1000;
+    rho = 29 + 2.5 * Math.sin((2 * Math.PI * t) / 240);
+    beta = 8 / 3 + 0.2 * Math.sin((2 * Math.PI * t) / 370);
+  }
+  drift();
+
   function deriv(x, y, z) {
-    return [SIGMA * (y - x), x * (RHO - z) - y, x * y - BETA * z];
+    return [SIGMA * (y - x), x * (rho - z) - y, x * y - beta * z];
   }
 
   function step() {
@@ -91,33 +103,36 @@
   new ResizeObserver(resize).observe(canvas);
   resize();
 
-  const project = (i, cos, sin) => [
-    cx + (xs[i] * cos - ys[i] * sin) * scale,
-    cy - zs[i] * scale,
-  ];
+  // Scalar helpers (no per-point arrays) so drawing 10k points doesn't churn the GC,
+  // whose pauses show up as stutter during the theme transition.
+  let cos = 1, sin = 0;
+  const screenX = (i) => cx + (xs[i] * cos - ys[i] * sin) * scale;
+  const screenY = (i) => cy - zs[i] * scale;
 
   // The hidden axis: distance towards the viewer, mapped to line thickness.
   // Quantised so consecutive segments of equal width share one stroke.
-  const nearness = (i, cos, sin) =>
+  const nearness = (i) =>
     Math.min(1, Math.max(0, (xs[i] * sin + ys[i] * cos + DEPTH_RANGE) / (2 * DEPTH_RANGE)));
-  const widthLevel = (i, cos, sin) => Math.round(nearness(i, cos, sin) * (WIDTH_LEVELS - 1));
+  const widthLevel = (i) => Math.round(nearness(i) * (WIDTH_LEVELS - 1));
   const widthOf = (level) => MIN_WIDTH + (MAX_WIDTH - MIN_WIDTH) * (level / (WIDTH_LEVELS - 1));
 
   function draw() {
     ctx.clearRect(0, 0, w, h);
     if (count < 2) return;
-    const cos = Math.cos(angle), sin = Math.sin(angle);
+    cos = Math.cos(angle); sin = Math.sin(angle);
     const start = (head - count + TRAIL) % TRAIL;
 
     ctx.lineJoin = "round";
     ctx.lineCap = "butt"; // round caps would overlap at stroke joins and show as beads
     ctx.strokeStyle = trailColor;
-    let [px, py] = project(start, cos, sin);
+    let px = screenX(start), py = screenY(start);
     let bucket = -1, level = -1;
     for (let k = 1; k < count; k++) {
       const i = (start + k) % TRAIL;
+      // Skip by buffer index, not by k, so the same points are drawn every frame (no shimmer).
+      if (i % DRAW_EVERY && k !== count - 1) continue;
       const b = Math.min(BUCKETS - 1, Math.floor((k * BUCKETS) / count)); // age: 0 = oldest
-      const l = widthLevel(i, cos, sin);
+      const l = widthLevel(i);
       if (b !== bucket || l !== level) {
         if (bucket >= 0) ctx.stroke();
         bucket = b; level = l;
@@ -127,17 +142,16 @@
         ctx.beginPath();
         ctx.moveTo(px, py);
       }
-      [px, py] = project(i, cos, sin);
+      px = screenX(i); py = screenY(i);
       ctx.lineTo(px, py);
     }
     ctx.stroke();
 
     const last = (head - 1 + TRAIL) % TRAIL;
-    const [hx, hy] = project(last, cos, sin);
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = trailColor;
     ctx.beginPath();
-    ctx.arc(hx, hy, 1.5 + 1.5 * nearness(last, cos, sin), 0, Math.PI * 2);
+    ctx.arc(screenX(last), screenY(last), 1.5 + 1.5 * nearness(last), 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -152,6 +166,7 @@
 
   function frame() {
     if (canvas.clientWidth > 0) { // skip work when hidden on narrow screens
+      drift();
       for (let i = 0; i < STEPS_PER_FRAME; i++) { step(); push(); }
       angle += SPIN;
       draw();
