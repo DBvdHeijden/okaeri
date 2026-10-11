@@ -51,6 +51,14 @@ CREATE TABLE IF NOT EXISTS events (
     at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS events_key ON events (key);
+
+-- One float32 vector per story key and model; model names the dims too, e.g. embeddinggemma-2-text@256.
+CREATE TABLE IF NOT EXISTS embeddings (
+    key    TEXT NOT NULL,
+    model  TEXT NOT NULL,
+    vector BLOB NOT NULL,
+    PRIMARY KEY (key, model)
+);
 """
 
 # Columns added after the first release; added in place to existing databases.
@@ -188,6 +196,24 @@ class Store:
         cutoff = _iso(datetime.now(UTC) - timedelta(days=max_age_days))
         with self._conn() as db:
             db.execute("DELETE FROM items WHERE published_at < ? AND key NOT IN (SELECT key FROM events)", (cutoff,))
+            db.execute("DELETE FROM embeddings WHERE key NOT IN (SELECT key FROM items)")
+
+    # Embeddings
+
+    def embedded_keys(self, model: str) -> set[str]:
+        with self._conn() as db:
+            return {key for key, in db.execute("SELECT key FROM embeddings WHERE model = ?", (model,))}
+
+    def save_embeddings(self, model: str, rows: list[tuple[str, bytes]]) -> None:
+        with self._conn() as db:
+            db.executemany(
+                "INSERT OR REPLACE INTO embeddings (key, model, vector) VALUES (?, ?, ?)",
+                [(key, model, vector) for key, vector in rows],
+            )
+
+    def embeddings(self, model: str) -> dict[str, bytes]:
+        with self._conn() as db:
+            return dict(db.execute("SELECT key, vector FROM embeddings WHERE model = ?", (model,)))
 
     # Events / History
 

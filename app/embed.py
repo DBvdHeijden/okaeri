@@ -1,0 +1,80 @@
+"""Article embeddings with EmbeddingGemma 2, run locally. An experiment: rank() doesn't use them yet."""
+
+import logging
+import time
+from collections.abc import Callable
+
+import numpy as np
+import onnxruntime as ort
+from huggingface_hub import snapshot_download
+from tokenizers import Tokenizer
+
+from app import ROOT, settings
+from app.models import Article
+from app.sources import BY_ID
+from app.store import Store, article_id
+
+log = logging.getLogger("okaeri.embed")
+
+# The ONNX export of the 270M text model, 8-bit; vision and audio are separate files we never download.
+REPO = "onnx-community/embeddinggemma-2-ONNX"
+REVISION = "daa72c51243991dfcaf9f9137d2c573d8f7790c0"
+DIMS = 256  # Matryoshka: the model card calls quality near-lossless down to 256
+MODEL = f"embeddinggemma-2-text@{DIMS}"  # stored with each vector, so a new model or size re-embeds everything
+BATCH = 16  # faster than 32 and ~600 MB less peak RAM, measured on 200 feed items
+SUMMARY_CHARS = 500
+
+Embedder = Callable[[list[str]], np.ndarray]
+
+
+def load_embedder() -> Embedder:
+    """Download the model on first use; returns texts -> unit float32 vectors of DIMS."""
+    path = snapshot_download(
+        REPO,
+        revision=REVISION,
+        allow_patterns=["onnx/model_quantized.onnx*", "tokenizer.json"],
+        local_dir=ROOT / "data" / "models" / "embeddinggemma-2",
+    )
+    session = ort.InferenceSession(f"{path}/onnx/model_quantized.onnx")
+    tokenizer = Tokenizer.from_file(f"{path}/tokenizer.json")
+    tokenizer.enable_padding(pad_id=tokenizer.token_to_id("<pad>"), pad_token="<pad>")
+    no_media = np.zeros((0, 512), np.float32)  # the export takes image, video and audio features too
+
+    def embed(texts: list[str]) -> np.ndarray:
+        encodings = tokenizer.encode_batch(texts)
+        # sentence_embedding is mean-pooled and L2-normalised, as in the official model.
+        (vectors,) = session.run(["sentence_embedding"], {
+            "input_ids": np.array([e.ids for e in encodings], np.int64),
+            "attention_mask": np.array([e.attention_mask for e in encodings], np.int64),
+            "image_features": no_media,
+            "video_features": no_media,
+            "audio_features": no_media,
+        })
+        vectors = vectors[:, :DIMS]
+        return (vectors / np.linalg.norm(vectors, axis=1, keepdims=True)).astype(np.float32)
+
+    return embed
+
+
+def document(article: Article) -> str:
+    if not article.summary:
+        return f"title: none | text: {article.title}"
+    return f"title: {article.title} | text: {article.summary[:SUMMARY_CHARS]}"
+
+
+def embed_new(store: Store, embed: Embedder) -> None:
+    """Embed what's in the feed, plus everything with an event: the recommender's training signal."""
+    started = time.monotonic()
+    done = store.embedded_keys(MODEL)
+    feed = store.articles({i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID})
+    todo = {a.key: a for a in feed if a.key not in done}
+    for key in {e.key for e in store.events()} - done - todo.keys():
+        if article := store.article(article_id(key), BY_ID):
+            todo[key] = article
+    articles = sorted(todo.values(), key=lambda a: len(document(a)))  # similar lengths per batch: less padding
+    for start in range(0, len(articles), BATCH):
+        batch = articles[start : start + BATCH]
+        vectors = embed([document(a) for a in batch])
+        store.save_embeddings(MODEL, [(a.key, v.tobytes()) for a, v in zip(batch, vectors)])
+    if articles:
+        log.info("embedded %d items in %.1fs", len(articles), time.monotonic() - started)

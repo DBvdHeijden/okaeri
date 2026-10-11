@@ -18,6 +18,7 @@ import feedparser
 import httpx
 
 from app import settings
+from app.embed import embed_new, load_embedder
 from app.models import MAX_AGE_DAYS, FetchedItem, Source
 from app.store import Store
 
@@ -275,6 +276,7 @@ class Refresher:
         self.store = store
         self.catalogue = catalogue
         self.wake = asyncio.Event()
+        self.embedder = None  # loaded on the first cycle, so startup never waits for the model
 
     async def run(self) -> None:
         while True:
@@ -282,8 +284,7 @@ class Refresher:
                 selected = [self.catalogue[i] for i in settings.enabled_sources() if i in self.catalogue]
                 if due := await asyncio.to_thread(self.store.due, selected):
                     await refresh(self.store, due)
-                    # Embed step goes here, once new items are stored:
-                    # await asyncio.to_thread(embed_new, self.store)
+                    await self.embed()
             except Exception:
                 log.exception("refresh cycle failed")
             try:
@@ -291,3 +292,12 @@ class Refresher:
             except TimeoutError:
                 pass
             self.wake.clear()
+
+    async def embed(self) -> None:
+        if self.embedder is None:
+            try:
+                self.embedder = await asyncio.to_thread(load_embedder)
+            except Exception:
+                log.exception("could not load the embedding model; retrying next cycle")
+                return
+        await asyncio.to_thread(embed_new, self.store, self.embedder)
