@@ -14,11 +14,20 @@ from app import ROOT
 from app.models import MAX_AGE_DAYS, Article, Event, FetchedItem, Source
 from app.sources import FORMATS, source_format
 
-SCHEMA = """
+# Everything the user did, by story key: the History tab and the signal for ranking.
+EVENTS = """
+CREATE TABLE IF NOT EXISTS events (
+    id   INTEGER PRIMARY KEY,
+    type TEXT NOT NULL CHECK (type IN ('seed', 'unseed', 'click', 'hide', 'unhide')),
+    key  TEXT NOT NULL,
+    at   TEXT NOT NULL
+)"""
+
+SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS items (
     source_id      TEXT NOT NULL,
     key            TEXT NOT NULL,
-    id             TEXT NOT NULL,  -- article_id(key), for /r/{id} and /hide/{id}
+    id             TEXT NOT NULL,  -- article_id(key), for /r/{{id}} and /hide/{{id}}
     url            TEXT NOT NULL,
     title          TEXT NOT NULL,
     summary        TEXT NOT NULL DEFAULT '',
@@ -43,13 +52,7 @@ CREATE TABLE IF NOT EXISTS feeds (
 -- The selection moved to settings.json.
 DROP TABLE IF EXISTS selected_sources;
 
--- Everything the user did, by story key: the History tab and the signal for ranking.
-CREATE TABLE IF NOT EXISTS events (
-    id   INTEGER PRIMARY KEY,
-    type TEXT NOT NULL CHECK (type IN ('seed', 'click', 'hide', 'unhide')),
-    key  TEXT NOT NULL,
-    at   TEXT NOT NULL
-);
+{EVENTS};
 CREATE INDEX IF NOT EXISTS events_key ON events (key);
 
 -- One float32 vector per story key and model; model names the dims too, e.g. embeddinggemma-2-text@256.
@@ -103,6 +106,14 @@ class Store:
         with self._conn() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
+            if "'unseed'" not in db.execute("SELECT sql FROM sqlite_master WHERE name = 'events'").fetchone()[0]:
+                # SQLite can't change a CHECK in place: move the events into a table that allows the new type.
+                db.execute("BEGIN")
+                db.execute("ALTER TABLE events RENAME TO events_old")
+                db.execute(EVENTS)
+                db.execute("INSERT INTO events SELECT * FROM events_old")
+                db.execute("DROP TABLE events_old")
+                db.execute("CREATE INDEX events_key ON events (key)")
             for table, columns in MIGRATIONS.items():
                 have = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
                 for name, decl in columns.items():
@@ -261,33 +272,23 @@ class Store:
         rows = [r for r in rows if r[0] in sources]
         return _merge({rows[0][1]: rows}, sources)[0] if rows else None
 
-    def history(self, sources: dict[str, Source], limit: int = 100) -> list[Article]:
-        """Opened stories, most recently opened first; each story once.
-
-        published_at is when the story was last opened.
-        """
+    def stories(self, times: dict[str, datetime], sources: dict[str, Source]) -> list[Article]:
+        """These stories in the given order, each with published_at set to its time (when opened, liked or hidden)."""
+        keys = ",".join("?" * len(times))
         with self._conn() as db:
-            opened = dict(db.execute(
-                "SELECT key, max(at) AS last FROM events WHERE type = 'click' GROUP BY key ORDER BY last DESC LIMIT ?",
-                (limit,),
-            ).fetchall())
-            keys = ",".join("?" * len(opened))
             rows = db.execute(
                 f"""
                 SELECT source_id, key, url, title, summary, discussion_url, published_at, score, comments
                 FROM items WHERE key IN ({keys})
                 """,
-                list(opened),
+                list(times),
             ).fetchall()
         groups: dict[str, list[tuple]] = {}
         for row in rows:
             if row[0] in sources:
                 groups.setdefault(row[1], []).append(row)
         by_key = {a.key: a for a in _merge(groups, sources)}
-        return [
-            replace(by_key[key], published_at=datetime.fromisoformat(last))
-            for key, last in opened.items() if key in by_key
-        ]
+        return [replace(by_key[key], published_at=at) for key, at in times.items() if key in by_key]
 
     # Reading
 

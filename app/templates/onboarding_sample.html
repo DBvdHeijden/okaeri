@@ -1,52 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Sample · okaeri{% endblock %}
 {% block head %}{% if pending and not articles %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
-{% block actions %}
-  <a class="icon-btn" href="/onboarding/sources" aria-label="Back to sources">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-  </a>
-{% endblock %}
+{% block page_class %}wide{% endblock %}
 {% block content %}
 <header class="masthead">
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>What would you read?</h1>
-    <p class="date">Step 3 of 3 · Tick the stories that catch your eye. This helps rank your homepage later.</p>
+    <p class="date">Step 3 of 3 · Rate a few stories, if you like. This helps rank your homepage later.</p>
   </div>
 </header>
 
 {% if articles %}
-<form method="post" action="/onboarding/sample" data-onboarding>
-  <fieldset class="group">
-    <legend>A sample from your sources</legend>
-    <ul class="sources">
-      {% for a in articles %}
-      <li>
-        <label class="source">
-          <span class="source-text">
-            <span class="source-name">{{ a.title }}</span>
-            <span class="source-desc">{{ a.source }} · {{ format_of(a) }}</span>
-          </span>
-          <input type="checkbox" class="check" aria-label="{{ a.title }}" name="articles" value="{{ a.id }}" {% if a.key in seeded %}checked{% endif %}>
-        </label>
-      </li>
-      {% endfor %}
-    </ul>
-  </fieldset>
-
-  <div class="footer-bar">
-    <span data-selected-count aria-live="polite">0 selected</span>
-    <span class="footer-actions">
-      <a class="quiet-btn" href="/">Skip</a>
-      <button type="submit" class="primary-btn">Done</button>
+<ul class="sources rate-list">
+  {% for a in articles %}
+  <li class="rate-row">
+    <span class="source-text">
+      <a class="source-name" href="/r/{{ a.id }}" target="_blank" rel="noopener">{{ a.title }}</a>
+      <span class="source-desc">{{ a.source }} · {{ format_of(a) }}</span>
     </span>
-  </div>
-</form>
+    {#- Without JS each button posts and the page reloads with others; with JS it saves in place and toggles. #}
+    <form method="post" action="/rate/{{ a.id }}" class="rate" data-rate>
+      <button type="submit" class="icon-btn" name="rating" value="up" aria-pressed="false" aria-label="More like this">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+      </button>
+      <button type="submit" class="icon-btn" name="rating" value="down" aria-pressed="false" aria-label="Not for me">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+<div class="footer-bar">
+  <a class="quiet-btn" href="/onboarding/sample">Show others</a>
+  <span class="footer-actions">
+    <a class="quiet-btn" href="/onboarding/sources">Back</a>
+    <a class="primary-btn" href="/">Done</a>
+  </span>
+</div>
 {% else %}
 <p class="empty">{% if pending %}Fetching a first batch from your sources…{% else %}Nothing to sample yet.{% endif %}</p>
 <div class="footer-bar">
   <span></span>
-  {% if pending %}<a class="quiet-btn" href="/">Skip</a>{% else %}<a class="primary-btn" href="/">Done</a>{% endif %}
+  <span class="footer-actions">
+    <a class="quiet-btn" href="/onboarding/sources">Back</a>
+    {% if pending %}<a class="quiet-btn" href="/">Skip</a>{% else %}<a class="primary-btn" href="/">Done</a>{% endif %}
+  </span>
 </div>
 {% endif %}
 {% endblock %}

@@ -2,10 +2,11 @@ import asyncio
 import json
 import logging
 import os
+import random
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
@@ -16,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 from app import settings
 from app.embed import model_downloaded, pending
 from app.fetch import Refresher
-from app.models import Article
+from app.models import Article, Event
 from app.rank import rank, sample
 from app.sources import BY_ID, FORMATS, SOURCES, TOPICS, format_of, in_tab, source_format, source_matches
 from app.store import Store, default_path, open_store
@@ -25,7 +26,9 @@ log = logging.getLogger("okaeri")
 
 HERE = Path(__file__).parent
 PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
-SAMPLE_SIZE = 20
+SAMPLE_SIZE = 5
+HISTORY_SIZE = 100
+HISTORY_VIEWS = {"opened": "Opened", "liked": "Liked", "hidden": "Hidden"}
 
 FORMAT_GROUPS = {"paper": "Papers", "blog": "Blogs", "forum": "Forums", "news": "News"}  # onboarding sections
 
@@ -85,15 +88,43 @@ templates.env.filters["count"] = count
 templates.env.globals["format_of"] = format_of
 
 
+def switched_on(events: list[Event], on: str, off: str) -> dict[str, datetime]:
+    """Stories whose latest on/off event is `on` (liked: seed/unseed, hidden: hide/unhide), with when."""
+    state = {}
+    for e in events:
+        if e.type == on:
+            state[e.key] = e.at
+        elif e.type == off:
+            state.pop(e.key, None)
+    return state
+
+
+def history(view: str) -> list[Article]:
+    """Opened, liked or hidden stories, most recent first; chronological by design, so not ranked."""
+    events = store().events()
+    times = {
+        "opened": {e.key: e.at for e in events if e.type == "click"},
+        "liked": switched_on(events, "seed", "unseed"),
+        "hidden": switched_on(events, "hide", "unhide"),
+    }[view]
+    newest = sorted(times.items(), key=lambda item: item[1], reverse=True)[:HISTORY_SIZE]
+    return store().stories(dict(newest), BY_ID)  # the whole catalog: links stay for sources you no longer follow
+
+
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, tab: str = "", n: Annotated[int, Query(ge=1)] = PAGE_SIZE):
+def home(
+    request: Request,
+    tab: str = "",
+    n: Annotated[int, Query(ge=1)] = PAGE_SIZE,
+    show: Literal["opened", "liked", "hidden"] = "opened",
+):
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     if not selected:
         return RedirectResponse("/onboarding", status_code=303)
     tabs = settings.tabs()
     active = next((t for t in tabs if t["slug"] == tab), tabs[0])  # the first tab is the default
     if active["history"]:
-        ranked = store().history(BY_ID)  # chronological by design; not a recommendation, so not ranked
+        ranked = history(show)
     else:
         pool = [a for a in store().articles(selected) if in_tab(a, active["tags"])]
         ranked = rank(pool, store().events(), settings.load())
@@ -107,6 +138,8 @@ def home(request: Request, tab: str = "", n: Annotated[int, Query(ge=1)] = PAGE_
             "page_size": PAGE_SIZE,
             "tab": active,
             "tabs": tabs,
+            "show": show,
+            "history_views": HISTORY_VIEWS,
             "pending": store().pending(selected),
             "today": datetime.now().strftime("%A, %-d %B"),
         },
@@ -263,23 +296,29 @@ def onboarding_sample(request: Request):
     interests = settings.interests()
     pool = [a for a in store().articles(selected) if in_tab(a, [*interests["formats"], *interests["topics"]])]
     events = store().events()
-    seeded = {e.key for e in events if e.type == "seed"}
+    rated = switched_on(events, "seed", "unseed") | switched_on(events, "hide", "unhide")
+    unrated = [a for a in rank(pool, events, settings.load()) if a.key not in rated]
+    random.shuffle(unrated)  # a different few on every load: that's the "show others" button
     return templates.TemplateResponse(
         request,
         "onboarding_sample.html",
-        {
-            "articles": sample(rank(pool, events, settings.load()), SAMPLE_SIZE),
-            "seeded": seeded,
-            "pending": store().pending(selected),
-        },
+        {"articles": sample(unrated, SAMPLE_SIZE), "pending": store().pending(selected)},
     )
 
 
-@app.post("/onboarding/sample")
-def onboarding_sample_submit(articles: Annotated[list[str] | None, Form()] = None):
-    seeded = {e.key for e in store().events() if e.type == "seed"}
-    for id in articles or []:
-        if (article := store().article(id, BY_ID)) and article.key not in seeded:
-            store().add_event("seed", article.key)
-    return RedirectResponse("/", status_code=303)
+@app.post("/rate/{id}")
+def rate(request: Request, id: str, rating: Annotated[Literal["up", "down", "none"], Form()]):
+    """A like is a seed, a dislike a hide (so it also leaves the feed); "none" takes back either."""
+    key = find_article(id).key
+    events = store().events()
+    liked, hidden = key in switched_on(events, "seed", "unseed"), key in switched_on(events, "hide", "unhide")
+    if liked and rating != "up":
+        store().add_event("unseed", key)
+    if hidden and rating != "down":
+        store().add_event("unhide", key)
+    if rating == "up" and not liked:
+        store().add_event("seed", key)
+    if rating == "down" and not hidden:
+        store().add_event("hide", key)
+    return back(request)
 

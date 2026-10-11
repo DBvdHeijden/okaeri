@@ -38,7 +38,7 @@ class FetchedItem:
 
 @dataclass(frozen=True)
 class Event:
-    type: Literal["seed", "click", "hide", "unhide"]
+    type: Literal["seed", "unseed", "click", "hide", "unhide"]
     key: str
     at: datetime
 

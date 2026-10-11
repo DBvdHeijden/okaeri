@@ -9,13 +9,13 @@ from app.models import Article, Event
 
 
 def rank(articles: Sequence[Article], events: Sequence[Event], settings: dict) -> list[Article]:
-    latest = {e.key: e.type for e in events}  # events come oldest first
+    latest = {e.key: e.type for e in events if e.type in ("hide", "unhide")}  # events come oldest first
     visible = [a for a in articles if latest.get(a.key) != "hide"]
     return sorted(visible, key=lambda a: a.published_at, reverse=True)
 
 
 def sample(articles: Sequence[Article], size: int) -> list[Article]:
-    """A spread for onboarding: the best story from each source in turn, so no one source fills it."""
+    """A spread for onboarding: the first story from each source in turn, so no one source fills it."""
     by_source: dict[str, list[Article]] = {}
     for a in articles:
         by_source.setdefault(a.source_id, []).append(a)

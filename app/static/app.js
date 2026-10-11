@@ -33,16 +33,36 @@
     }, 5000);
   }
 
+  // Post a form in the background; the page changes right away, and changes back if the save fails.
+  // Success is a redirect (the server sends you back), which fetch reports as an opaque redirect.
+  const save = (form, body, revert) =>
+    fetch(form.action, { method: "POST", body, redirect: "manual" })
+      .then((r) => { if (!r.ok && r.type !== "opaqueredirect") revert(); }, revert);
+
   // Hide / undo: the server records it; collapse the row in place instead of reloading.
   document.addEventListener("submit", (e) => {
     const row = e.target.closest(".row");
-    if (!row) return;
+    if (!row || !e.target.matches("[data-hide], [data-undo]")) return;  // History's undo buttons reload the list
     e.preventDefault();
-    fetch(e.target.action, { method: "POST", redirect: "manual" });
     const hiding = e.target.matches("[data-hide]");
-    row.querySelector(".row-body").hidden = hiding;
-    row.querySelector(".row-hidden").hidden = !hiding;
+    const show = (hidden) => {
+      row.querySelector(".row-body").hidden = hidden;
+      row.querySelector(".row-hidden").hidden = !hidden;
+    };
+    show(hiding);
+    save(e.target, null, () => show(!hiding));
     row.querySelector(hiding ? "[data-undo] button" : "[data-hide] button").focus();
+  });
+
+  // Onboarding ratings save in place; pressing the chosen one again takes the rating back.
+  document.addEventListener("submit", (e) => {
+    if (!e.target.matches("[data-rate]")) return;
+    e.preventDefault();
+    const buttons = [...e.target.querySelectorAll("button")];
+    const before = buttons.map((btn) => btn.getAttribute("aria-pressed"));
+    const rating = e.submitter.getAttribute("aria-pressed") === "true" ? "none" : e.submitter.value;
+    for (const btn of buttons) btn.setAttribute("aria-pressed", btn.value === rating);
+    save(e.target, new URLSearchParams({ rating }), () => buttons.forEach((btn, i) => btn.setAttribute("aria-pressed", before[i])));
   });
 
   // Feed paging: split rows into pages that fit the viewport, so the page never
@@ -203,9 +223,13 @@
   const form = document.querySelector("[data-onboarding]");
   if (form) {
     const count = form.querySelector("[data-selected-count]");
+    const checks = form.querySelectorAll(".check");
+    const selectAll = form.querySelector("[data-select-all]");
+    const allChecked = () => [...checks].every((c) => c.checked);
     const updateCount = () => {
       const n = form.querySelectorAll(".check:checked").length;
       count.textContent = `${n} selected`;
+      if (selectAll) selectAll.textContent = allChecked() ? "Deselect all" : "Select all";
       for (const group of form.querySelectorAll("[data-group]")) {
         const label = group.querySelector("[data-group-count]");
         if (label) label.textContent =
@@ -213,6 +237,13 @@
       }
     };
     form.addEventListener("change", updateCount);
+    // One button: selects everything, or clears everything once all is selected.
+    selectAll?.addEventListener("click", () => {
+      const on = !allChecked();
+      for (const c of checks) c.checked = on;
+      updateCount();
+    });
+    if (selectAll) selectAll.hidden = false;
     updateCount();
 
     const search = document.querySelector("[data-source-search]");
