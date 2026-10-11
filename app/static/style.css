@@ -173,6 +173,7 @@ h1 {
 }
 
 .row { border-bottom: 1px solid var(--line); }
+.row form { display: contents; }
 
 .row-body {
   display: flex;

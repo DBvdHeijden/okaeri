@@ -23,48 +23,17 @@
     });
   }
 
-  // Hide / undo. Client-side only for now; persist here later.
-  function hideArticle(id) {
-    const row = document.querySelector(`.row[data-id="${id}"]`);
-    if (!row) return;
-    row.querySelector(".row-body").hidden = true;
-    const hidden = row.querySelector(".row-hidden");
-    hidden.hidden = false;
-    hidden.querySelector("[data-undo]").focus();
-  }
-
-  function unhideArticle(id) {
-    const row = document.querySelector(`.row[data-id="${id}"]`);
-    if (!row) return;
-    row.querySelector(".row-hidden").hidden = true;
-    row.querySelector(".row-body").hidden = false;
-    row.querySelector("[data-hide]").focus();
-  }
-
-  document.addEventListener("click", (e) => {
+  // Hide / undo: the server records it; collapse the row in place instead of reloading.
+  document.addEventListener("submit", (e) => {
     const row = e.target.closest(".row");
     if (!row) return;
-    if (e.target.closest("[data-hide]")) hideArticle(row.dataset.id);
-    else if (e.target.closest("[data-undo]")) unhideArticle(row.dataset.id);
+    e.preventDefault();
+    fetch(e.target.action, { method: "POST", redirect: "manual" });
+    const hiding = e.target.matches("[data-hide]");
+    row.querySelector(".row-body").hidden = hiding;
+    row.querySelector(".row-hidden").hidden = !hiding;
+    row.querySelector(hiding ? "[data-undo] button" : "[data-hide] button").focus();
   });
-
-  // Record opened stories for the History tab (title or comments link, any mouse button).
-  // sendBeacon survives the page navigating away.
-  const recordOpen = (e) => {
-    const link = e.target.closest(".row-text a");
-    if (!link || (e.type === "auxclick" && e.button !== 1)) return;
-    const row = link.closest(".row");
-    const title = row.querySelector(".title");
-    const data = new FormData();
-    data.set("key", row.dataset.key);
-    data.set("url", title.href);
-    data.set("title", title.textContent.trim());
-    data.set("source", row.dataset.source);
-    data.set("kind", row.dataset.kind);
-    navigator.sendBeacon?.("/api/clicks", data);
-  };
-  document.addEventListener("click", recordOpen);
-  document.addEventListener("auxclick", recordOpen);
 
   // Feed paging: split rows into pages that fit the viewport, so the page never
   // scrolls. Arrow buttons (and ←/→ keys) cycle through them, wrapping around.

@@ -31,32 +31,36 @@
 {% if articles %}
 <ol class="feed">
   {% for a in articles %}
-  <li class="row" data-id="{{ a.id }}" data-key="{{ a.key }}" data-source="{{ a.source }}" data-kind="{{ a.kind }}">
+  <li class="row">
     <div class="row-body">
       <div class="row-text">
-        <a class="title" href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a>
+        <a class="title" href="/r/{{ a.id }}" target="_blank" rel="noopener">{{ a.title }}</a>
         {%- set thread = a.discussion_url if a.discussion_url and a.discussion_url != a.url else none %}
         {#- Without a comment count to link, the source / "also on" text links to the thread instead. #}
         {%- set link_names = thread and a.comments is none %}
         <p class="meta">
           {%- if kind == "history" %}{% set opened = a.published_at | ago %}{{ a.source }} · opened <time datetime="{{ a.published_at.isoformat() }}">{{ "just now" if opened == "now" else opened ~ " ago" }}</time>{% else %}
-          {%- if link_names and a.kind == "forum" %}<a href="{{ thread }}" target="_blank" rel="noopener">{{ a.source }}</a>{% else %}{{ a.source }}{% endif %}
+          {%- if link_names and a.kind == "forum" %}<a href="/r/{{ a.id }}?to=thread" target="_blank" rel="noopener">{{ a.source }}</a>{% else %}{{ a.source }}{% endif %}
           · <time datetime="{{ a.published_at.isoformat() }}">{{ a.published_at | ago }}</time>
-          {%- if a.also_on %} · {% if link_names and a.kind != "forum" %}<a href="{{ thread }}" target="_blank" rel="noopener">also on {{ a.also_on | join(", ") }}</a>{% else %}also on {{ a.also_on | join(", ") }}{% endif %}{% endif %}
+          {%- if a.also_on %} · {% if link_names and a.kind != "forum" %}<a href="/r/{{ a.id }}?to=thread" target="_blank" rel="noopener">also on {{ a.also_on | join(", ") }}</a>{% else %}also on {{ a.also_on | join(", ") }}{% endif %}{% endif %}
           {%- if a.score is not none %} · {{ a.score | count("point") }}{% endif %}
-          {%- if a.comments is not none %} · {% if a.discussion_url %}<a href="{{ a.discussion_url }}" target="_blank" rel="noopener">{{ a.comments | count("comment") }}</a>{% else %}{{ a.comments | count("comment") }}{% endif %}{% endif %}
+          {%- if a.comments is not none %} · {% if a.discussion_url %}<a href="/r/{{ a.id }}?to=thread" target="_blank" rel="noopener">{{ a.comments | count("comment") }}</a>{% else %}{{ a.comments | count("comment") }}{% endif %}{% endif %}
           {%- endif %}
         </p>
       </div>
       {% if kind != "history" %}
-      <button type="button" class="icon-btn hide-btn" data-hide aria-label="Hide “{{ a.title }}”">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
+      <form method="post" action="/hide/{{ a.id }}" data-hide>
+        <button type="submit" class="icon-btn hide-btn" aria-label="Hide “{{ a.title }}”">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </form>
       {% endif %}
     </div>
     <div class="row-hidden" hidden>
       <span>Hidden.</span>
-      <button type="button" class="link-btn" data-undo>Undo</button>
+      <form method="post" action="/unhide/{{ a.id }}" data-undo>
+        <button type="submit" class="link-btn">Undo</button>
+      </form>
     </div>
   </li>
   {% endfor %}

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app import server, settings
 from app.sources import SOURCES
+from app.store import article_id
 from tests.conftest import item
 
 # No `with`: the lifespan (and so the background fetcher) does not run.
@@ -36,7 +37,10 @@ def test_home_merges_and_orders(store):
     html = client.get("/").text
     assert titles(html) == ["Blog post", "Forum link", "A paper"]
     assert "also on Hacker News" in html
-    assert 'href="https://news.ycombinator.com/item?id=1"' in html
+    thread = f'href="/r/{article_id("simonwillison.net/a")}?to=thread"'
+    assert thread in html
+    r = client.get(f"/r/{article_id('simonwillison.net/a')}?to=thread", follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"] == "https://news.ycombinator.com/item?id=1"
 
 
 def test_kind_filter(store):
@@ -94,7 +98,7 @@ def test_counts_shown_with_comment_link(store):
                                  discussion_url="https://news.ycombinator.com/item?id=9")], None, None)
     html = client.get("/").text
     assert "1,516 points" in html
-    assert '<a href="https://news.ycombinator.com/item?id=9" target="_blank" rel="noopener">1 comment</a>' in html
+    assert f'<a href="/r/{article_id("e.com/a")}?to=thread" target="_blank" rel="noopener">1 comment</a>' in html
 
 
 def tab_labels(html: str) -> list[str]:
@@ -114,8 +118,8 @@ def test_single_kind_shows_only_all_and_history(store):
 
 
 def open_story(key):
-    r = client.post("/api/clicks", data={"key": key})
-    assert r.status_code == 204
+    r = client.get(f"/r/{article_id(key)}", follow_redirects=False)
+    assert r.status_code == 302
 
 
 def test_history_lists_opened_stories_latest_first(store):
@@ -133,7 +137,17 @@ def test_history_empty_state(store):
     assert "Nothing opened yet." in client.get("/?kind=history").text
 
 
-def test_click_on_unknown_story_not_in_history(store):
+def test_unknown_article_is_404(store):
     seed(store)
-    open_story("e.com/unknown")
-    assert titles(client.get("/?kind=history").text) == []
+    assert client.get("/r/nope").status_code == 404
+    assert client.post("/hide/nope").status_code == 404
+
+
+def test_hide_and_unhide(store):
+    seed(store)
+    hidden = article_id("example.com/news")
+    r = client.post(f"/hide/{hidden}", headers={"referer": "/?kind=forum"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/?kind=forum"
+    assert titles(client.get("/").text) == ["Blog post", "A paper"]
+    client.post(f"/unhide/{hidden}")
+    assert titles(client.get("/").text) == ["Blog post", "Forum link", "A paper"]

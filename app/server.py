@@ -7,14 +7,14 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Form, Query, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import settings
 from app.fetch import Refresher
-from app.models import KIND_LABELS, KINDS
+from app.models import KIND_LABELS, KINDS, Article
 from app.rank import rank
 from app.sources import BY_ID, SOURCES
 from app.store import Store, default_path, open_store
@@ -114,9 +114,34 @@ def home(request: Request, kind: str = "all", n: Annotated[int, Query(ge=1)] = M
     )
 
 
-@app.post("/api/clicks", status_code=204)
-def record_click(key: Annotated[str, Form()]):
-    store().add_event("click", key)
+def find_article(id: str) -> Article:
+    # The whole catalog, so History links still work for sources no longer followed.
+    if article := store().article(id, BY_ID):
+        return article
+    raise HTTPException(404)
+
+
+@app.get("/r/{id}")
+def open_article(id: str, to: str = ""):
+    article = find_article(id)
+    store().add_event("click", article.key)
+    return RedirectResponse(article.discussion_url if to == "thread" else article.url, status_code=302)
+
+
+def back(request: Request) -> RedirectResponse:
+    return RedirectResponse(request.headers.get("referer", "/"), status_code=303)
+
+
+@app.post("/hide/{id}")
+def hide(request: Request, id: str):
+    store().add_event("hide", find_article(id).key)
+    return back(request)
+
+
+@app.post("/unhide/{id}")
+def unhide(request: Request, id: str):
+    store().add_event("unhide", find_article(id).key)
+    return back(request)
 
 
 @app.get("/favicon.ico", include_in_schema=False)

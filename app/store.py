@@ -17,6 +17,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
     source_id      TEXT NOT NULL,
     key            TEXT NOT NULL,
+    id             TEXT NOT NULL,  -- article_id(key), for /r/{id} and /hide/{id}
     url            TEXT NOT NULL,
     title          TEXT NOT NULL,
     summary        TEXT NOT NULL DEFAULT '',
@@ -52,7 +53,7 @@ CREATE INDEX IF NOT EXISTS events_key ON events (key);
 """
 
 # Columns added after the first release; added in place to existing databases.
-MIGRATIONS = {"items": {"score": "INTEGER", "comments": "INTEGER"}}
+MIGRATIONS = {"items": {"score": "INTEGER", "comments": "INTEGER", "id": "TEXT"}}
 
 # When the same story comes from several sources, the first kind here is shown;
 # the others become "also on". Forums last: they mostly link to someone else's post.
@@ -63,6 +64,10 @@ assert set(PRIMARY_ORDER) == set(KINDS)
 def _same_publisher(a: str, b: str) -> bool:
     """BBC Science / BBC World, NOS Tech / NOS Nieuws, arXiv cs.LG / arXiv cs.AI."""
     return a.split()[0] == b.split()[0]
+
+
+def article_id(key: str) -> str:
+    return hashlib.sha1(key.encode()).hexdigest()[:12]
 
 
 def default_path() -> Path:
@@ -87,6 +92,9 @@ class Store:
                 for name, decl in columns.items():
                     if name not in have:
                         db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+            keys = db.execute("SELECT DISTINCT key FROM items WHERE id IS NULL").fetchall()
+            db.executemany("UPDATE items SET id = ? WHERE key = ?", [(article_id(k), k) for k, in keys])
+            db.execute("CREATE INDEX IF NOT EXISTS items_id ON items (id)")
             if db.execute("SELECT 1 FROM sqlite_master WHERE name = 'clicks'").fetchone():
                 db.execute("INSERT INTO events (type, key, at) SELECT 'click', key, clicked_at FROM clicks ORDER BY id")
                 db.execute("DROP TABLE clicks")
@@ -139,16 +147,16 @@ class Store:
             if items:
                 db.executemany(
                     """
-                    INSERT INTO items (source_id, key, url, title, summary, discussion_url, published_at,
+                    INSERT INTO items (source_id, key, id, url, title, summary, discussion_url, published_at,
                                        fetched_at, score, comments)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (source_id, key) DO UPDATE SET
                         url = excluded.url, title = excluded.title, summary = excluded.summary,
                         discussion_url = excluded.discussion_url, fetched_at = excluded.fetched_at,
                         score = excluded.score, comments = excluded.comments
                     """,  # published_at is kept from first sight, so undated items don't float up
                     [
-                        (source_id, i.key, i.url, i.title, i.summary, i.discussion_url, _iso(i.published_at),
+                        (source_id, i.key, article_id(i.key), i.url, i.title, i.summary, i.discussion_url, _iso(i.published_at),
                          now, i.score, i.comments)
                         for i in items
                     ],
@@ -190,6 +198,18 @@ class Store:
         with self._conn() as db:
             rows = db.execute("SELECT type, key, at FROM events ORDER BY id").fetchall()
         return [Event(type, key, datetime.fromisoformat(at)) for type, key, at in rows]
+
+    def article(self, id: str, sources: dict[str, Source]) -> Article | None:
+        with self._conn() as db:
+            rows = db.execute(
+                """
+                SELECT source_id, key, url, title, summary, discussion_url, published_at, score, comments
+                FROM items WHERE id = ?
+                """,
+                (id,),
+            ).fetchall()
+        rows = [r for r in rows if r[0] in sources]
+        return _merge({rows[0][1]: rows}, sources)[0] if rows else None
 
     def history(self, sources: dict[str, Source], limit: int = 100) -> list[Article]:
         """Opened stories, most recently opened first; each story once.
@@ -269,7 +289,7 @@ def _merge(groups: dict[str, list[tuple]], sources: dict[str, Source]) -> list[A
         if not discussion_url:
             discussion_url = next((r[5] for r in group if r[5]), None)
         articles.append(Article(
-            id=hashlib.sha1(key.encode()).hexdigest()[:12],
+            id=article_id(key),
             key=key,
             title=title,
             url=url,
