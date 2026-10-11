@@ -18,7 +18,6 @@ okaeri = "okaeri.server:main"
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.13.1",
     "pytest>=8",
 ]
 
