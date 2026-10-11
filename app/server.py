@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Red
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app import settings
 from app.fetch import Refresher
 from app.models import KIND_LABELS, KINDS
 from app.rank import rank
@@ -84,7 +85,7 @@ templates.env.filters["count"] = count
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, kind: str = "all"):
-    selected = {i: BY_ID[i] for i in store().selected() if i in BY_ID}
+    selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     if not selected:
         return RedirectResponse("/onboarding", status_code=303)
     # Only offer tabs for kinds the user follows; one kind needs no tabs at all.
@@ -135,14 +136,14 @@ def favicon():
 def onboarding(request: Request):
     groups = [(KIND_LABELS[k], [s for s in SOURCES if s.kind == k]) for k in KINDS]
     return templates.TemplateResponse(
-        request, "onboarding.html", {"groups": groups, "selected": store().selected()}
+        request, "onboarding.html", {"groups": groups, "selected": settings.enabled_sources()}
     )
 
 
 @app.post("/onboarding")
 def onboarding_submit(request: Request, sources: Annotated[list[str] | None, Form()] = None):
     chosen = [i for i in sources or [] if i in BY_ID]
-    store().set_selected(chosen)
+    settings.set_enabled_sources(chosen)
     log.info("selected %d sources", len(chosen))
     if refresher := getattr(request.app.state, "refresher", None):
         refresher.wake.set()

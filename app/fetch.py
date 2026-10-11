@@ -17,6 +17,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 import feedparser
 import httpx
 
+from app import settings
 from app.models import MAX_AGE_DAYS, FetchedItem, Source
 from app.store import Store
 
@@ -273,7 +274,7 @@ class Refresher:
     async def run(self) -> None:
         while True:
             try:
-                selected = [self.catalogue[i] for i in self.store.selected() if i in self.catalogue]
+                selected = [self.catalogue[i] for i in settings.enabled_sources() if i in self.catalogue]
                 if due := self.store.due(selected):
                     await refresh(self.store, due)
             except Exception:

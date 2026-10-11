@@ -2,7 +2,7 @@ import re
 
 from fastapi.testclient import TestClient
 
-from app import server
+from app import server, settings
 from app.sources import SOURCES
 from tests.conftest import item
 
@@ -15,7 +15,7 @@ def titles(html: str) -> list[str]:
 
 
 def seed(store):
-    store.set_selected(["simonw", "hn", "arxiv-cs.lg"])
+    settings.set_enabled_sources(["simonw", "hn", "arxiv-cs.lg"])
     store.save_fetch("simonw", [item("https://simonwillison.net/a", "Blog post", hours_ago=2)], None, None)
     store.save_fetch("hn", [
         item("https://simonwillison.net/a/", "Blog post (HN title)", hours_ago=1,
@@ -47,12 +47,12 @@ def test_kind_filter(store):
 
 def test_only_selected_sources_shown(store):
     seed(store)
-    store.set_selected(["arxiv-cs.lg"])
+    settings.set_enabled_sources(["arxiv-cs.lg"])
     assert titles(client.get("/").text) == ["A paper"]
 
 
 def test_pending_state(store):
-    store.set_selected(["lobsters"])
+    settings.set_enabled_sources(["lobsters"])
     html = client.get("/").text
     assert "Fetching your sources" in html and 'http-equiv="refresh"' in html
 
@@ -64,13 +64,13 @@ def test_routes_go_through_rank(store, monkeypatch):
 
 
 def test_list_capped(store, monkeypatch):
-    store.set_selected(["simonw"])
+    settings.set_enabled_sources(["simonw"])
     store.save_fetch("simonw", [item(f"https://simonwillison.net/{i}") for i in range(120)], None, None)
     assert len(titles(client.get("/").text)) == server.MAX_ARTICLES
 
 
 def test_onboarding_lists_sources_and_checks_selected(store):
-    store.set_selected(["hn"])
+    settings.set_enabled_sources(["hn"])
     html = client.get("/onboarding").text
     assert all(s.name in html for s in SOURCES)
     assert re.search(r'value="hn" checked', html)
@@ -80,7 +80,7 @@ def test_onboarding_lists_sources_and_checks_selected(store):
 def test_onboarding_submit_persists(store):
     r = client.post("/onboarding", data={"sources": ["hn", "arxiv-cs.lg", "bogus"]}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/"
-    assert store.selected() == {"hn", "arxiv-cs.lg"}
+    assert settings.enabled_sources() == ["hn", "arxiv-cs.lg"]
 
 
 def test_favicons():
@@ -89,7 +89,7 @@ def test_favicons():
 
 
 def test_counts_shown_with_comment_link(store):
-    store.set_selected(["hn"])
+    settings.set_enabled_sources(["hn"])
     store.save_fetch("hn", [item("https://e.com/a", "Counted", score=1516, comments=1,
                                  discussion_url="https://news.ycombinator.com/item?id=9")], None, None)
     html = client.get("/").text
@@ -109,7 +109,7 @@ def test_tabs_only_for_followed_kinds(store):
 
 
 def test_single_kind_shows_only_all_and_history(store):
-    store.set_selected(["simonw", "jvns"])
+    settings.set_enabled_sources(["simonw", "jvns"])
     assert tab_labels(client.get("/").text) == ["All", "History"]
 
 

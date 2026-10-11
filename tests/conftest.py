@@ -2,12 +2,14 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app import settings
 from app.models import FetchedItem
 from app.store import Store, open_store
 
 
 @pytest.fixture
 def store(tmp_path, monkeypatch) -> Store:
+    monkeypatch.setattr(settings, "PATH", tmp_path / "settings.json")
     path = tmp_path / "okaeri.db"
     monkeypatch.setenv("OKAERI_DB", str(path))
     return open_store(path)

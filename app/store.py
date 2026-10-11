@@ -1,4 +1,4 @@
-"""SQLite storage: fetched items, per-feed HTTP cache state, and the source selection."""
+"""SQLite storage: fetched items, per-feed HTTP cache state, and clicks."""
 
 import hashlib
 import os
@@ -37,9 +37,8 @@ CREATE TABLE IF NOT EXISTS feeds (
     error         TEXT
 );
 
-CREATE TABLE IF NOT EXISTS selected_sources (
-    source_id TEXT PRIMARY KEY
-);
+-- The selection moved to settings.json.
+DROP TABLE IF EXISTS selected_sources;
 
 -- Stories the user opened. A snapshot, so History outlives pruned items;
 -- also the interest signal for ranking later.
@@ -100,17 +99,6 @@ class Store:
                 yield db
         finally:
             db.close()
-
-    # Selection
-
-    def selected(self) -> set[str]:
-        with self._conn() as db:
-            return {row[0] for row in db.execute("SELECT source_id FROM selected_sources")}
-
-    def set_selected(self, source_ids: Iterable[str]) -> None:
-        with self._conn() as db:
-            db.execute("DELETE FROM selected_sources")
-            db.executemany("INSERT INTO selected_sources VALUES (?)", [(i,) for i in set(source_ids)])
 
     # Feed state
 
