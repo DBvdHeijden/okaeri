@@ -30,6 +30,7 @@ DEFAULT_PORT = 12362
 PORT = int(os.environ.get("OKAERI_PORT", DEFAULT_PORT))
 URL = f"http://localhost:{PORT}"
 LOG = ROOT / "data" / "okaeri.log"
+MAX_LOG_BYTES = 5 * 2**20
 MAC, LINUX = sys.platform == "darwin", sys.platform.startswith("linux")
 
 # One service per port, so a second checkout on another port doesn't replace the first.
@@ -81,7 +82,21 @@ WantedBy=default.target
 """
 
 
+def rotate_log() -> None:
+    if not LOG.exists() or LOG.stat().st_size < MAX_LOG_BYTES:
+        return
+    started_by_service = os.path.samestat(os.fstat(sys.stdout.fileno()), LOG.stat())
+    LOG.replace(LOG.with_name("okaeri.log.1"))
+    if started_by_service:
+        # launchd/systemd opened the log for us and would keep writing to the renamed file; switch to a fresh one.
+        fd = os.open(LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        os.dup2(fd, sys.stdout.fileno())
+        os.dup2(fd, sys.stderr.fileno())
+        os.close(fd)
+
+
 def serve() -> None:
+    rotate_log()
     logging.basicConfig(level=logging.INFO)
     uvicorn.run(
         "app.server:app",
