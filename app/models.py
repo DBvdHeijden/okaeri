@@ -17,6 +17,7 @@ class Source:
     tags: tuple[str, ...]  # exactly one format tag, 0-2 topic tags; read through app.sources
     url: str  # what we fetch
     site: str  # what we show
+    language: str  # ISO 639-1 code of the feed's language, e.g. "en", "nl"
     description: str = ""
     fetcher: Fetcher = "rss"
     refresh_minutes: int = 30  # blogs; forums and news override, papers go slower

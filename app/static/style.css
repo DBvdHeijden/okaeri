@@ -480,6 +480,16 @@ h1 {
 .tag-check:checked + span { background: var(--text); border-color: var(--text); color: var(--bg); }
 .tag-check:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Ranking: a slider per signal, then the top of Recommended taken apart */
+.weight { display: flex; align-items: center; gap: 16px; min-height: 44px; padding: 10px 0; }
+.weight input { width: 120px; accent-color: var(--text); }
+.weight output { width: 28px; font: 13px var(--mono); color: var(--muted); text-align: right; }
+.why-note { margin: 16px 0 8px; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.why { margin: 0 0 16px; padding-left: 20px; }
+.why li { margin-bottom: 10px; }
+.why .source-name { display: block; font-weight: 400; }
+.why-parts { font: 12px var(--mono); color: var(--muted); }
+
 .add-tab { margin: 0 0 8px 12px; }
 .add-tab[hidden] { display: none; }
 .fold > .search { display: block; margin: 0 0 4px; }

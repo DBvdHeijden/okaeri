@@ -1,4 +1,28 @@
 {
-  "formats": ["paper", "blog", "forum", "news"],
-  "topics": ["ai", "software", "tech", "science", "physics", "math", "world"]
+  "languages": {
+    "en": "English",
+    "nl": "Dutch"
+  },
+  "formats": {
+    "paper": "Peer-reviewed research and preprints, straight from journals and arXiv.",
+    "blog": "Personal and lab blogs: slower, longer, opinionated.",
+    "forum": "Link aggregators and discussion boards, ranked by their communities.",
+    "news": "Newsrooms and magazines reporting as it happens."
+  },
+  "topics": {
+    "ai": "Machine learning, language models and the people building them.",
+    "software": "Programming, tools, systems and engineering practice.",
+    "tech": "The tech industry, gadgets, hardware and how they shape daily life.",
+    "security": "Hacks, vulnerabilities, privacy and cybercrime.",
+    "science": "Research news across all the natural sciences.",
+    "physics": "From particles and quantum to cosmology.",
+    "math": "Pure and applied mathematics, proofs and puzzles.",
+    "biology": "Life sciences: genes, cells, evolution and ecology.",
+    "health": "Medicine, public health and drug discovery.",
+    "climate": "Climate change, energy and the environment.",
+    "space": "Spaceflight, astronomy and planetary science.",
+    "world": "General and international news from around the globe.",
+    "politics": "Elections, governments, policy and geopolitics.",
+    "economy": "Markets, business and economic ideas."
+  }
 }

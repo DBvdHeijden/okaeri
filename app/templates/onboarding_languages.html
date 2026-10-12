@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Languages · okaeri{% endblock %}
+{% block page_class %}wide{% endblock %}
+{% block content %}
+<header class="masthead">
+  <div>
+    <p class="kicker" lang="ja">はじめまして</p>
+    <h1>Which languages do you read?</h1>
+    <p class="date">Step 2 of 6 · We'll only suggest sources in these. Pick at least one.</p>
+  </div>
+</header>
+
+<form method="post" action="/onboarding/languages" data-onboarding>
+  <fieldset class="group">
+    <legend>Languages</legend>
+    <ul class="sources">
+      {% for code, name, n in options %}
+      <li>
+        <label class="source">
+          <span class="source-text">
+            <span class="source-name">{{ name }}</span>
+            <span class="source-desc">{{ n | count("source") }}</span>
+          </span>
+          <input type="checkbox" class="check" aria-label="{{ name }}" name="languages" value="{{ code }}" {% if code in chosen %}checked{% endif %}>
+        </label>
+      </li>
+      {% endfor %}
+    </ul>
+  </fieldset>
+
+  <div class="footer-bar">
+    <span class="footer-actions">
+      <span data-selected-count aria-live="polite">0 selected</span>
+    </span>
+    <span class="footer-actions">
+      <a class="quiet-btn" href="/onboarding?redo=1">Back</a>
+      <button type="submit" class="primary-btn">Next</button>
+    </span>
+  </div>
+</form>
+{% endblock %}

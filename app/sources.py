@@ -16,6 +16,8 @@ log = logging.getLogger("okaeri")
 _VOCAB = json.loads((ROOT / "catalog" / "tags.json").read_text())
 FORMATS: frozenset[str] = frozenset(_VOCAB["formats"])
 TOPICS: frozenset[str] = frozenset(_VOCAB["topics"])
+TAG_DESCRIPTIONS: dict[str, str] = {**_VOCAB["formats"], **_VOCAB["topics"]}
+LANGUAGES: dict[str, str] = _VOCAB["languages"]  # code -> name
 
 
 def known_tags(tags: Iterable[str], where: str) -> tuple[str, ...]:
@@ -30,6 +32,8 @@ def _source(raw: dict) -> Source:
     formats = [t for t in tags if t in FORMATS]
     if len(formats) != 1:
         raise ValueError(f"source {raw['id']!r} needs exactly one format tag, has {formats}")
+    if raw["language"] not in LANGUAGES:
+        raise ValueError(f"source {raw['id']!r} has unknown language {raw['language']!r}")
     return Source(**{**raw, "tags": tags})
 
 
@@ -57,12 +61,16 @@ def format_of(article: Article) -> str:
     return source_format(BY_ID[article.source_id])
 
 
+def speaks(source: Source, languages: Iterable[str]) -> bool:
+    return source.language in languages
+
+
 def source_matches(source: Source, formats: Iterable[str], topics: Iterable[str]) -> bool:
-    """For onboarding. Picking nothing means everything; general sources (no topic) fit any topic."""
-    formats, topics, own_topics = set(formats), set(topics), set(source.tags) & TOPICS
-    if formats and source_format(source) not in formats:
+    """For onboarding. General sources (no topic) fit any topic."""
+    own_topics = set(source.tags) & TOPICS
+    if source_format(source) not in formats:
         return False
-    return not topics or not own_topics or bool(own_topics & topics)
+    return not own_topics or bool(own_topics & set(topics))
 
 
 def tab_covers(source: Source, tab_tags: Iterable[str], tab_sources: Iterable[str]) -> bool:

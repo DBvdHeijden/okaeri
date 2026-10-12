@@ -6,7 +6,7 @@
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>What are you curious about?</h1>
-    <p class="date">Step 2 of 5 · Pick the fields and formats you enjoy, or none at all to see a bit of everything.</p>
+    <p class="date">Step 3 of 6 · Pick the fields and formats you enjoy: at least one of each.</p>
   </div>
 </header>
 
@@ -21,7 +21,7 @@
         <label class="source">
           <span class="source-text">
             <span class="source-name">{{ label }}</span>
-            <span class="source-desc">{{ n | count("source") }}</span>
+            <span class="source-desc">{{ tag_descriptions[value] }} · {{ n | count("source") }}</span>
           </span>
           <input type="checkbox" class="check" aria-label="{{ label }}" name="{{ name }}" value="{{ value }}" {% if value in chosen %}checked{% endif %}>
         </label>
@@ -38,7 +38,7 @@
       <button type="button" class="link-btn" data-select-all hidden>Select all</button>
     </span>
     <span class="footer-actions">
-      <a class="quiet-btn" href="/onboarding?redo=1">Back</a>
+      <a class="quiet-btn" href="/onboarding/languages">Back</a>
       <button type="submit" class="primary-btn">Next</button>
     </span>
   </div>

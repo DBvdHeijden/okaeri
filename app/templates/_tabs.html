@@ -1,4 +1,4 @@
-{#- The tab editor, shared by Settings and onboarding step 4; import it with context.
+{#- The tab editor, shared by Settings and the onboarding tabs step; import it with context.
     Needs tabs, formats, topics and source_choices; app.js ([data-tabs]) runs it and fills the "tabs" field on submit. #}
 {% macro chip(kind, value, label, on, attrs={}) %}
 <label class="tag"><input type="checkbox" class="tag-check" data-pick="{{ kind }}" value="{{ value }}"{{ attrs | xmlattr }} {% if on %}checked{% endif %}><span>{{ label }}</span></label>
@@ -22,11 +22,11 @@
            aria-label="Tab name" data-tab-name>
     <div class="tab-filter">
       <span class="tab-filter-label">Formats</span>
-      <span class="tag-group">{% for f in formats %}{{ chip("format", f, f, f in t.tags) }}{% endfor %}</span>
+      <span class="tag-group">{% for f in formats %}{{ chip("format", f, f, f in t.tags, {"title": tag_descriptions[f]}) }}{% endfor %}</span>
     </div>
     <div class="tab-filter">
       <span class="tab-filter-label">Topics</span>
-      <span class="tag-group">{% for topic in topics %}{{ chip("topic", topic, topic, topic in t.tags) }}{% endfor %}</span>
+      <span class="tag-group">{% for topic in topics %}{{ chip("topic", topic, topic, topic in t.tags, {"title": tag_descriptions[topic]}) }}{% endfor %}</span>
     </div>
     <details class="tab-sources"{% if t.sources %} open{% endif %}>
       <summary class="tab-filter"><span class="tab-filter-label">Sources</span><span class="tab-filter-count" data-source-count></span></summary>

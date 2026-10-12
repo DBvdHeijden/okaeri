@@ -17,9 +17,11 @@ from fastapi.templating import Jinja2Templates
 from app import settings
 from app.embed import model_downloaded, pending, stored_vectors
 from app.fetch import Refresher
-from app.models import Article
-from app.rank import rank, sample, switched_on
-from app.sources import BY_ID, FORMATS, SOURCES, TOPICS, format_of, in_tab, source_format, source_matches
+from app.models import Article, Source
+from app.rank import explain, rank, sample, switched_on
+from app.sources import (
+    BY_ID, FORMATS, LANGUAGES, SOURCES, TAG_DESCRIPTIONS, TOPICS, format_of, in_tab, source_format, source_matches, speaks,
+)
 from app.store import Store, default_path, open_store
 
 log = logging.getLogger("okaeri")
@@ -28,6 +30,7 @@ HERE = Path(__file__).parent
 PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 SAMPLE_SIZE = 5
 HISTORY_SIZE = 100
+RANKING_EXAMPLES = 5  # top stories broken down in Settings
 HISTORY_VIEWS = {"opened": "Opened", "liked": "Liked", "hidden": "Hidden"}
 
 FORMAT_GROUPS = {"paper": "Papers", "blog": "Blogs", "forum": "Forums", "news": "News"}  # onboarding sections
@@ -86,6 +89,8 @@ def count(n: int, word: str) -> str:
 templates.env.filters["ago"] = ago
 templates.env.filters["count"] = count
 templates.env.globals["format_of"] = format_of
+templates.env.globals["tag_descriptions"] = TAG_DESCRIPTIONS
+templates.env.filters["language_name"] = LANGUAGES.get
 
 
 def history(view: str) -> list[Article]:
@@ -203,7 +208,7 @@ def wake_refresher(request: Request) -> None:
 # Settings: the sources you follow, and a way back into onboarding. Onboarding is only for when nothing is picked yet.
 
 def tab_editor_context() -> dict:
-    """What the tab editor (_tabs.html) needs, in Settings and onboarding step 4."""
+    """What the tab editor (_tabs.html) needs, in Settings and the onboarding tabs step."""
     tabs = settings.all_tabs()
     # The sources you follow, plus any a tab still uses, so saving never silently drops one.
     ids = {*settings.enabled_sources(), *(s for t in tabs for s in t["sources"])}
@@ -226,33 +231,73 @@ def settings_page(request: Request):
     if not enabled:
         return RedirectResponse("/onboarding", status_code=303)
     groups = [
-        (label, sorted((s for s in SOURCES if source_format(s) == f), key=lambda s: s.id not in enabled))
+        (label, sorted((s for s in spoken_sources() if source_format(s) == f), key=lambda s: s.id not in enabled))
         for f, label in FORMAT_GROUPS.items()
     ]
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {**tab_editor_context(), "groups": groups, "selected": enabled, "progress": background_work(request)},
+        {**tab_editor_context(), **ranking_context(), "groups": groups, "selected": enabled, "languages": LANGUAGES, "spoken": settings.languages(), "progress": background_work(request)},
     )
+
+
+def ranking_context() -> dict:
+    """What Recommended learns from, and how its current top stories score."""
+    events = store().events()
+    pool = store().articles({i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID})
+    top = explain(pool, events, settings.load(), stored_vectors(store()))[:RANKING_EXAMPLES]
+    nearest = store().stories({b.nearest: datetime.now(UTC) for b in top if b.nearest}, BY_ID)
+    return {
+        "weights": settings.weights(),
+        "learned": {
+            "opened": len({e.key for e in events if e.type == "click"}),
+            "liked": len(switched_on(events, "seed", "unseed")),
+            "hidden": len(switched_on(events, "hide", "unhide")),
+        },
+        "top": top,
+        "titles": {a.key: a.title for a in nearest},
+    }
 
 
 @app.post("/settings")
 def settings_submit(
     request: Request,
     sources: Annotated[list[str] | None, Form()] = None,
+    languages: Annotated[list[str] | None, Form()] = None,
     tabs: Annotated[str | None, Form()] = None,  # JSON from the tab editor; absent without JS
+    like: Annotated[float | None, Form()] = None,
+    hidden: Annotated[float | None, Form()] = None,
+    fresh: Annotated[float | None, Form()] = None,
+    popular: Annotated[float | None, Form()] = None,
 ):
-    settings.set_enabled_sources([i for i in sources or [] if i in BY_ID])
+    # At least one language: unticking them all keeps the ones you had.
+    if picked := [lang for lang in languages or [] if lang in LANGUAGES]:
+        settings.set_languages(picked)
+    # Sources in a language you dropped go too.
+    settings.set_enabled_sources([i for i in sources or [] if i in BY_ID and speaks(BY_ID[i], settings.languages())])
+    if None not in (like, hidden, fresh, popular):
+        settings.set_weights({"like": like, "hidden": hidden, "fresh": fresh, "popular": popular})
     if tabs is not None:
         settings.set_tabs(json.loads(tabs))
     wake_refresher(request)
     return RedirectResponse("/", status_code=303)
 
 
-# Onboarding: your name (optional), interests, sources, a sample of stories to rate, then (optionally) tabs.
+# Onboarding: your name (optional), languages, interests, sources, a sample of stories to rate, then (optionally) tabs.
+
+def spoken_sources() -> list[Source]:
+    return [s for s in SOURCES if speaks(s, settings.languages())]
+
 
 def source_count(tag: str) -> int:
-    return sum(tag in s.tags for s in SOURCES)
+    return sum(tag in s.tags for s in spoken_sources())
+
+
+@app.post("/history/clear")
+def clear_history():
+    """Forget every opened, liked and hidden story, and with them everything Recommended learned."""
+    store().clear_events()
+    return RedirectResponse("/settings", status_code=303)
 
 
 @app.post("/onboarding/redo")
@@ -278,6 +323,23 @@ def onboarding_name(request: Request, redo: bool = False):
 @app.post("/onboarding")
 def onboarding_name_submit(name: Annotated[str, Form()] = ""):
     settings.set_name(name)
+    return RedirectResponse("/onboarding/languages", status_code=303)
+
+
+@app.get("/onboarding/languages", response_class=HTMLResponse)
+def onboarding_languages(request: Request):
+    options = [(code, name, sum(s.language == code for s in SOURCES)) for code, name in LANGUAGES.items()]
+    return templates.TemplateResponse(
+        request, "onboarding_languages.html", {"options": options, "chosen": settings.languages()}
+    )
+
+
+@app.post("/onboarding/languages")
+def onboarding_languages_submit(languages: Annotated[list[str] | None, Form()] = None):
+    picked = [lang for lang in languages or [] if lang in LANGUAGES]
+    if not picked:
+        return RedirectResponse("/onboarding/languages", status_code=303)
+    settings.set_languages(picked)
     return RedirectResponse("/onboarding/interests", status_code=303)
 
 
@@ -296,16 +358,21 @@ def onboarding_interests(request: Request):
 def onboarding_interests_submit(
     formats: Annotated[list[str] | None, Form()] = None, topics: Annotated[list[str] | None, Form()] = None
 ):
-    settings.set_interests([f for f in formats or [] if f in FORMATS], [t for t in topics or [] if t in TOPICS])
+    formats = [f for f in formats or [] if f in FORMATS]
+    topics = [t for t in topics or [] if t in TOPICS]
+    if not formats or not topics:
+        return RedirectResponse("/onboarding/interests", status_code=303)
+    settings.set_interests(formats, topics)
     return RedirectResponse("/onboarding/sources", status_code=303)
 
 
 @app.get("/onboarding/sources", response_class=HTMLResponse)
 def onboarding_sources(request: Request):
     interests = settings.interests()
-    matching = [s for s in SOURCES if source_matches(s, interests["formats"], interests["topics"])]
+    spoken = spoken_sources()
+    matching = [s for s in spoken if source_matches(s, interests["formats"], interests["topics"])]
     groups = [(label, [s for s in matching if source_format(s) == f]) for f, label in FORMAT_GROUPS.items()]
-    groups.append(("Other sources", [s for s in SOURCES if s not in matching]))
+    groups.append(("Other sources", [s for s in spoken if s not in matching]))
     # First time through, everything that matches starts checked.
     selected = settings.enabled_sources() or [s.id for s in matching]
     return templates.TemplateResponse(

@@ -84,6 +84,16 @@ def set_name(name: str) -> None:
     save(settings)
 
 
+def languages() -> list[str]:
+    return load()["languages"]
+
+
+def set_languages(languages: list[str]) -> None:
+    settings = load()
+    settings["languages"] = languages
+    save(settings)
+
+
 def interests() -> dict:
     return load()["interests"]
 
@@ -91,6 +101,16 @@ def interests() -> dict:
 def set_interests(formats: list[str], topics: list[str]) -> None:
     settings = load()
     settings["interests"] = {"formats": formats, "topics": topics}
+    save(settings)
+
+
+def weights() -> dict[str, float]:
+    return load()["ranking"]
+
+
+def set_weights(weights: dict[str, float]) -> None:
+    settings = load()
+    settings["ranking"] = {k: min(max(weights[k], 0.0), 1.0) for k in settings["ranking"]}
     save(settings)
 
 

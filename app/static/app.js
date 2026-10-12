@@ -50,7 +50,7 @@
     else row.remove();
   });
 
-  // Onboarding step 4: a rating saves in the background, the tally counts up, and the story makes way
+  // Onboarding sample step: a rating saves in the background, the tally counts up, and the story makes way
   // for a new one (none of the stories on screen; from another source if there is one).
   document.addEventListener("submit", async (e) => {
     if (!e.target.matches("[data-rate]")) return;
@@ -208,7 +208,7 @@
   // Web fonts change row heights; re-fit once they're in.
   document.fonts?.ready.then(() => paging?.paginate());
 
-  // Tabs (Settings and onboarding step 4). All and History can only be hidden; custom tabs can also be edited.
+  // Tabs (Settings and the onboarding tabs step). All and History can only be hidden; custom tabs can also be edited.
   // On save the rows become the "tabs" JSON in settings.json.
   const tabsEditor = document.querySelector("[data-tabs]");
   if (tabsEditor) {

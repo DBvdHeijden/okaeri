@@ -255,6 +255,10 @@ class Store:
         with self._conn() as db:
             db.execute("INSERT INTO events (type, key, at) VALUES (?, ?, ?)", (type, key, _iso(datetime.now(UTC))))
 
+    def clear_events(self) -> None:
+        with self._conn() as db:
+            db.execute("DELETE FROM events")
+
     def events(self) -> list[Event]:
         with self._conn() as db:
             rows = db.execute("SELECT type, key, at FROM events ORDER BY id").fetchall()
