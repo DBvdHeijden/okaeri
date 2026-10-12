@@ -1,45 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Sample · okaeri{% endblock %}
 {% block head %}{% if pending and not articles %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='lorenz.js') }}" defer></script>{% endblock %}
 {% block page_class %}wide{% endblock %}
 {% block content %}
 <header class="masthead">
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
-    <h1>What would you read?</h1>
-    <p class="date">Step 3 of 4 · Rate a few stories, if you like. This helps rank your homepage later.</p>
+    <h1>Anything catch your eye?</h1>
+    <p class="date">Step 4 of 5 · Tick what you'd read and cross what you wouldn't. It helps okaeri learn what you like; totally optional.</p>
   </div>
 </header>
 
 {% if articles %}
-<ul class="sources rate-list">
-  {% for a in articles %}
-  <li class="rate-row">
-    <span class="source-text">
-      <a class="source-name" href="/r/{{ a.id }}" target="_blank" rel="noopener">{{ a.title }}</a>
-      <span class="source-desc">{{ a.source }} · {{ format_of(a) }}</span>
-    </span>
-    {#- Without JS each button posts and the page reloads with others; with JS it saves in place and toggles. #}
-    <form method="post" action="/rate/{{ a.id }}" class="rate" data-rate>
-      <button type="submit" class="icon-btn" name="rating" value="up" aria-pressed="false" aria-label="More like this">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-      </button>
-      <button type="submit" class="icon-btn" name="rating" value="down" aria-pressed="false" aria-label="Not for me">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
-    </form>
-  </li>
-  {% endfor %}
-</ul>
+<div class="rate-layout">
+  <ul class="sources rate-list">
+    {% for a in articles %}{% include "_sample_row.html" %}{% endfor %}
+  </ul>
+  <canvas class="learning" data-lorenz data-lorenz-paced aria-hidden="true"></canvas>
+</div>
 <div class="footer-bar">
-  <a class="quiet-btn" href="/onboarding/sample">Show others</a>
+  <span class="footer-actions">
+    <a class="quiet-btn flush" href="/onboarding/sample">Show others</a>
+    <span class="tally" data-tally data-liked="{{ liked }}" data-disliked="{{ disliked }}" aria-live="polite">{{ liked }} liked · {{ disliked }} not for me</span>
+  </span>
   <span class="footer-actions">
     <a class="quiet-btn" href="/onboarding/sources">Back</a>
     <a class="primary-btn" href="/onboarding/tabs">Next</a>
   </span>
 </div>
 {% else %}
-<p class="empty">{% if pending %}Fetching a first batch from your sources…{% else %}Nothing to sample yet.{% endif %}</p>
+<p class="empty">{% if pending %}Fetching the first stories from your sources, one moment…{% else %}No stories yet. You can always come back to this later.{% endif %}</p>
 <div class="footer-bar">
   <span></span>
   <span class="footer-actions">

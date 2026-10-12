@@ -74,6 +74,16 @@ def tabs() -> list[dict]:
     return [t for t in all_tabs() if not t["hidden"]] or [ALL_TAB]
 
 
+def name() -> str:
+    return load()["name"]
+
+
+def set_name(name: str) -> None:
+    settings = load()
+    settings["name"] = name.strip()[:40]
+    save(settings)
+
+
 def interests() -> dict:
     return load()["interests"]
 

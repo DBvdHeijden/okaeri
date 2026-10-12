@@ -11,7 +11,8 @@
   <div>
     <p class="kicker" lang="ja">設定</p>
     <h1>Settings</h1>
-    <p class="date">Following {{ selected | length | count("source") }} · <a href="/onboarding?redo=1">Redo onboarding</a></p>
+    {#- A post, not a link: starting over clears your likes and dislikes. #}
+    <form class="date" method="post" action="/onboarding/redo">Following {{ selected | length | count("source") }} · <button type="submit" class="date-link">Redo onboarding</button></form>
   </div>
 </header>
 

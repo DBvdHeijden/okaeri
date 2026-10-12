@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -132,6 +132,7 @@ def home(
             "history_views": HISTORY_VIEWS,
             "pending": store().pending(selected),
             "today": datetime.now().strftime("%A, %-d %B"),
+            "name": settings.name(),
         },
     )
 
@@ -248,17 +249,40 @@ def settings_submit(
     return RedirectResponse("/", status_code=303)
 
 
-# Onboarding: interests, then sources, then a sample of stories to rate, then (optionally) tabs.
+# Onboarding: your name (optional), interests, sources, a sample of stories to rate, then (optionally) tabs.
 
 def source_count(tag: str) -> int:
     return sum(tag in s.tags for s in SOURCES)
 
 
+@app.post("/onboarding/redo")
+def onboarding_redo():
+    """Start over from Settings: likes and dislikes go too. Taken back as events, so the log stays whole;
+    a dislike is a hide, so stories hidden on the homepage come back as well. Opened stories stay."""
+    events = store().events()
+    for key in switched_on(events, "seed", "unseed"):
+        store().add_event("unseed", key)
+    for key in switched_on(events, "hide", "unhide"):
+        store().add_event("unhide", key)
+    return RedirectResponse("/onboarding?redo=1", status_code=303)
+
+
 @app.get("/onboarding", response_class=HTMLResponse)
-def onboarding_interests(request: Request, redo: bool = False):
+def onboarding_name(request: Request, redo: bool = False):
     # A redo starts from your current answers; nothing changes until you submit each step.
     if settings.enabled_sources() and not redo:
         return RedirectResponse("/settings", status_code=303)
+    return templates.TemplateResponse(request, "onboarding_name.html", {"name": settings.name()})
+
+
+@app.post("/onboarding")
+def onboarding_name_submit(name: Annotated[str, Form()] = ""):
+    settings.set_name(name)
+    return RedirectResponse("/onboarding/interests", status_code=303)
+
+
+@app.get("/onboarding/interests", response_class=HTMLResponse)
+def onboarding_interests(request: Request):
     groups = [
         ("Fields", "topics", [(t, t, source_count(t)) for t in sorted(TOPICS)]),
         ("Formats", "formats", [(f, label, source_count(f)) for f, label in FORMAT_GROUPS.items()]),
@@ -268,7 +292,7 @@ def onboarding_interests(request: Request, redo: bool = False):
     return templates.TemplateResponse(request, "onboarding_interests.html", {"groups": groups, "chosen": chosen})
 
 
-@app.post("/onboarding")
+@app.post("/onboarding/interests")
 def onboarding_interests_submit(
     formats: Annotated[list[str] | None, Form()] = None, topics: Annotated[list[str] | None, Form()] = None
 ):
@@ -298,8 +322,8 @@ def onboarding_sources_submit(request: Request, sources: Annotated[list[str] | N
     return RedirectResponse("/onboarding/sample", status_code=303)
 
 
-@app.get("/onboarding/sample", response_class=HTMLResponse)
-def onboarding_sample(request: Request):
+def sample_pool() -> list[Article]:
+    """Stories from your sources that fit your interests and that you haven't rated yet, shuffled."""
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     interests = settings.interests()
     pool = [
@@ -310,11 +334,33 @@ def onboarding_sample(request: Request):
     rated = switched_on(events, "seed", "unseed") | switched_on(events, "hide", "unhide")
     unrated = [a for a in rank(pool, events, settings.load()) if a.key not in rated]
     random.shuffle(unrated)  # a different few on every load: that's the "show others" button
+    return unrated
+
+
+@app.get("/onboarding/sample", response_class=HTMLResponse)
+def onboarding_sample(request: Request):
+    selected = [i for i in settings.enabled_sources() if i in BY_ID]
+    events = store().events()
     return templates.TemplateResponse(
         request,
         "onboarding_sample.html",
-        {"articles": sample(unrated, SAMPLE_SIZE), "pending": store().pending(selected)},
+        {
+            "articles": sample(sample_pool(), SAMPLE_SIZE),
+            "pending": store().pending(selected),
+            "liked": len(switched_on(events, "seed", "unseed")),
+            "disliked": len(switched_on(events, "hide", "unhide")),
+        },
     )
+
+
+@app.get("/onboarding/sample/next", response_class=HTMLResponse)
+def onboarding_sample_next(request: Request, shown: str = "", sources: str = ""):
+    """One new story to replace one you just rated: not on screen yet, from a source not on screen if possible."""
+    pool = [a for a in sample_pool() if a.id not in shown.split(",")]
+    if not pool:
+        return Response(status_code=204)
+    fresh = [a for a in pool if a.source_id not in sources.split(",")] or pool
+    return templates.TemplateResponse(request, "_sample_row.html", {"a": fresh[0]})
 
 
 @app.get("/onboarding/tabs", response_class=HTMLResponse)

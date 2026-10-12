@@ -50,15 +50,33 @@
     else row.remove();
   });
 
-  // Onboarding ratings save in place; pressing the chosen one again takes the rating back.
-  document.addEventListener("submit", (e) => {
+  // Onboarding step 4: a rating saves in the background, the tally counts up, and the story makes way
+  // for a new one (none of the stories on screen; from another source if there is one).
+  document.addEventListener("submit", async (e) => {
     if (!e.target.matches("[data-rate]")) return;
     e.preventDefault();
-    const buttons = [...e.target.querySelectorAll("button")];
-    const before = buttons.map((btn) => btn.getAttribute("aria-pressed"));
-    const rating = e.submitter.getAttribute("aria-pressed") === "true" ? "none" : e.submitter.value;
-    for (const btn of buttons) btn.setAttribute("aria-pressed", btn.value === rating);
-    save(e.target, new URLSearchParams({ rating }), () => buttons.forEach((btn, i) => btn.setAttribute("aria-pressed", before[i])));
+    const row = e.target.closest(".rate-row");
+    const rating = e.submitter.value;
+    for (const btn of e.target.querySelectorAll("button")) btn.disabled = true;  // one rating per story
+    save(e.target, new URLSearchParams({ rating }), () => location.reload());
+
+    const tally = document.querySelector("[data-tally]");
+    const kind = rating === "up" ? "liked" : "disliked";
+    tally.dataset[kind] = Number(tally.dataset[kind]) + 1;
+    tally.textContent = `${tally.dataset.liked} liked · ${tally.dataset.disliked} not for me`;
+
+    const rows = [...row.parentElement.children];
+    const query = new URLSearchParams({
+      shown: rows.map((r) => r.dataset.id).join(","),
+      sources: rows.filter((r) => r !== row).map((r) => r.dataset.source).join(","),
+    });
+    const res = await fetch(`/onboarding/sample/next?${query}`).catch(() => null);
+    if (res?.status !== 200) return row.remove();  // nothing left to show
+    const template = document.createElement("template");
+    template.innerHTML = (await res.text()).trim();
+    const next = template.content.firstElementChild;
+    if (!REDUCED) next.classList.add("entering");
+    row.replaceWith(next);
   });
 
   // Feed paging: split rows into pages that fit the viewport, so the page never
@@ -300,7 +318,7 @@
     const notice = document.querySelector("[data-notice]");
     for (const btn of document.querySelectorAll("[data-not-yet]")) {
       btn.addEventListener("click", () => {
-        notice.textContent = `${btn.textContent.trim()}: not available yet.`;
+        notice.textContent = `${btn.textContent.trim()} isn't there yet, but it's coming.`;
       });
     }
   }

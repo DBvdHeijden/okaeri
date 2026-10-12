@@ -1,21 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Interests · okaeri{% endblock %}
-{% block actions %}
-  <a class="icon-btn" href="/" aria-label="Back to home">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-  </a>
-{% endblock %}
 {% block page_class %}wide{% endblock %}
 {% block content %}
 <header class="masthead">
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
-    <h1>What are you into?</h1>
-    <p class="date">Step 1 of 4 · Pick fields and formats. Pick none to see everything.</p>
+    <h1>What are you curious about?</h1>
+    <p class="date">Step 2 of 5 · Pick the fields and formats you enjoy, or none at all to see a bit of everything.</p>
   </div>
 </header>
 
-<form method="post" action="/onboarding" data-onboarding>
+<form method="post" action="/onboarding/interests" data-onboarding>
   <div class="columns">
   {% for legend, name, options in groups %}
   <fieldset class="group">
@@ -42,7 +37,10 @@
       <span data-selected-count aria-live="polite">0 selected</span>
       <button type="button" class="link-btn" data-select-all hidden>Select all</button>
     </span>
-    <button type="submit" class="primary-btn">Next</button>
+    <span class="footer-actions">
+      <a class="quiet-btn" href="/onboarding?redo=1">Back</a>
+      <button type="submit" class="primary-btn">Next</button>
+    </span>
   </div>
 </form>
 {% endblock %}

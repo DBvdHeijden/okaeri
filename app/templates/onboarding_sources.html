@@ -5,8 +5,8 @@
 <header class="masthead">
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
-    <h1>Pick your sources</h1>
-    <p class="date">Step 2 of 4 · These match your interests. You can change this later.</p>
+    <h1>Where should we look?</h1>
+    <p class="date">Step 3 of 5 · We've ticked the ones that match your interests. Add or drop any; you can always change them later.</p>
   </div>
 </header>
 
@@ -51,7 +51,7 @@
   </div>
   {% endfor %}
   </div>
-  <p class="empty" hidden data-no-results>No sources match.</p>
+  <p class="empty" hidden data-no-results>No sources match that. Try another word?</p>
 
   <div class="footer-bar">
     <span class="footer-actions">
@@ -59,7 +59,7 @@
       <button type="button" class="link-btn" data-select-all hidden>Select all</button>
     </span>
     <span class="footer-actions">
-      <a class="quiet-btn" href="/onboarding?redo=1">Back</a>
+      <a class="quiet-btn" href="/onboarding/interests">Back</a>
       <button type="submit" class="primary-btn">Next</button>
     </span>
   </div>

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Welcome · okaeri{% endblock %}
+{% block actions %}
+  <a class="icon-btn" href="/" aria-label="Back to home">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+  </a>
+{% endblock %}
+{% block page_class %}wide{% endblock %}
+{% block content %}
+<header class="masthead">
+  <div>
+    <p class="kicker" lang="ja">はじめまして</p>
+    <h1>Nice to meet you</h1>
+    <p class="date">Step 1 of 5 · What should we call you? Feel free to skip this.</p>
+  </div>
+</header>
+
+<form method="post" action="/onboarding">
+  <label class="name-field">
+    <span class="visually-hidden">Your name</span>
+    <input type="text" name="name" value="{{ name }}" placeholder="Your first name" maxlength="40" autocomplete="given-name" autofocus>
+  </label>
+
+  <div class="footer-bar">
+    <span></span>
+    <span class="footer-actions">
+      <a class="quiet-btn" href="/onboarding/interests">Skip</a>
+      <button type="submit" class="primary-btn">Next</button>
+    </span>
+  </div>
+</form>
+{% endblock %}
