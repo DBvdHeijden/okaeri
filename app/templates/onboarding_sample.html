@@ -3,12 +3,13 @@
 {% block head %}{% if pending and not articles %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block scripts %}<script src="{{ url_for('static', path='lorenz.js') }}" defer></script>{% endblock %}
 {% block page_class %}wide{% endblock %}
+{% from "_dials.html" import dials %}
 {% block content %}
 <header class="masthead">
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>Anything catch your eye?</h1>
-    <p class="date">Step 5 of 6 · Tick what you'd read and cross what you wouldn't. It helps okaeri learn what you like; totally optional.</p>
+    <p class="date">Step 5 of 6 · Tick what you'd read, cross what you wouldn't. The dials learn as you go.</p>
   </div>
 </header>
 
@@ -17,11 +18,15 @@
   <ul class="sources rate-list">
     {% for a in articles %}{% include "_sample_row.html" %}{% endfor %}
   </ul>
-  <canvas class="learning" data-lorenz data-lorenz-paced aria-hidden="true"></canvas>
+  <div class="learning-side">
+    <canvas class="learning" data-lorenz data-lorenz-paced aria-hidden="true"></canvas>
+    {#- What your ratings teach, live; move one yourself and it keeps learning from where you put it. #}
+    <div data-learned>{{ dials(weights, compact=True) }}</div>
+  </div>
 </div>
 <div class="footer-bar">
   <span class="footer-actions">
-    <a class="quiet-btn flush" href="/onboarding/sample">Show others</a>
+    <a class="quiet-btn flush" href="/onboarding/sample?shuffle=1">Show others</a>
     <span class="tally" data-tally data-liked="{{ liked }}" data-disliked="{{ disliked }}" aria-live="polite">{{ liked }} liked · {{ disliked }} not for me</span>
   </span>
   <span class="footer-actions">

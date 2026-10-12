@@ -85,12 +85,12 @@ button { font: inherit; color: inherit; }
 .page.wide > form { flex: 1; display: flex; flex-direction: column; gap: 40px; }
 .page.wide .footer-bar { margin-top: auto; }
 .page.wide .footer-bar .primary-btn { min-width: 104px; justify-content: center; }  /* Next and Done: same size, so Back stays put */
-/* Step 4: the stories on the left, the butterfly that fills in as you rate on the right; stacked when narrow. */
-.rate-layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 48px; align-items: start; margin-bottom: 40px; }
-.learning { display: block; width: 100%; aspect-ratio: 1; }
+/* Step 5: the stories on the left; on the right a small butterfly that fills in as you rate, over the dials
+   it's learning. Stacked when narrow. */
+.rate-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 48px; align-items: start; margin-bottom: 40px; }
+.learning { display: block; width: 160px; aspect-ratio: 1; margin: 0 auto; }
 @media (max-width: 760px) {
   .rate-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .learning { justify-self: center; width: min(100%, 320px); }
 }
 .columns {
   display: grid;
@@ -485,6 +485,12 @@ h1 {
 .weight { display: grid; grid-template-columns: minmax(0, 1fr) min(200px, 45%) 2.5ch; align-items: center; gap: 16px; min-height: 52px; }
 .weight label { transition: opacity 120ms ease; }
 .weight[data-off] label { opacity: 0.5; }
+/* Beside the onboarding stories the dials stay quiet: a word each, no lines, no numbers. */
+.sources.dials-compact { width: 240px; margin: 12px auto 0; border-top: 0; }
+.sources.dials-compact li { border-bottom: 0; }
+.dials-compact .weight { grid-template-columns: 64px minmax(0, 1fr); gap: 12px; min-height: 30px; }
+.dials-compact label { font: 12px var(--mono); color: var(--muted); }
+.dials-compact output { display: none; }
 .weight output { font: 13px var(--mono); color: var(--muted); text-align: right; }
 
 .dial { appearance: none; width: 100%; height: 28px; margin: 0; background: none; cursor: pointer; }

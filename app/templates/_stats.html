@@ -1,0 +1,7 @@
+{#- Points and comments, on the homepage and the onboarding stories to rate. #}
+{#- A count as an icon and a number; the words stay for screen readers and as a tooltip. #}
+{% macro stat(n, word, icon) -%}
+<span class="stat" title="{{ n | count(word) }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ icon }}</svg><span aria-hidden="true">{{ "{:,}".format(n) }}</span><span class="visually-hidden">{{ n | count(word) }}</span></span>
+{%- endmacro %}
+{% set points_icon %}<path d="M12 19V5M6 11l6-6 6 6"/>{% endset %}
+{% set comments_icon %}<path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.3-4.6A7.5 7.5 0 1 1 20 11.5z"/>{% endset %}

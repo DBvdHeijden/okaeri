@@ -1,5 +1,6 @@
 (() => {
   const root = document.documentElement;
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Theme: explicit choice overrides prefers-color-scheme.
   const currentTheme = () =>
@@ -37,6 +38,67 @@
     sure.addEventListener("keydown", (e) => { if (e.key === "Escape") asking(false); });
   }
 
+  // Ranking dials: a click glides the needle to the pointer, a drag follows it, and letting go settles
+  // on the nearest 0.1. The browser jumps the value straight to the pointer, so while a glide runs we
+  // put the value back and ease towards where it wanted to go. Setting one yourself sends "dial-set";
+  // glideTo() moves one from outside (onboarding, as it learns) without it.
+  const tenth = (v) => Math.min(Math.max(Math.round(v * 10) / 10, 0), 1);
+  const easeOut = (t) => 1 - (1 - t) ** 3;
+  for (const dial of document.querySelectorAll(".dial")) {
+    let shown = +dial.value, target = shown, tween = 0, gliding = false, pressed = false;
+    const show = (v) => {
+      shown = v;
+      dial.value = v;
+      dial.style.setProperty("--v", v);
+      dial.nextElementSibling.value = tenth(v).toFixed(1);
+      dial.parentElement.toggleAttribute("data-off", tenth(v) === 0);
+    };
+    // Eases from where the needle is to `target`, which may keep moving while it runs.
+    const glide = (ms) => {
+      const id = ++tween, from = shown, start = performance.now();
+      gliding = true;
+      const frame = (now) => {
+        if (id !== tween) return;  // a newer glide took over
+        const t = REDUCED ? 1 : Math.min((now - start) / ms, 1);
+        show(t < 1 ? from + (target - from) * easeOut(t) : target);
+        if (t < 1) requestAnimationFrame(frame);
+        else gliding = false;
+      };
+      requestAnimationFrame(frame);
+    };
+    const set = () => dial.dispatchEvent(new CustomEvent("dial-set", { bubbles: true, detail: target }));
+    const settle = () => {
+      if (target === tenth(target) && !pressed) return;  // pointerup and change both land here
+      pressed = false;
+      target = tenth(target);
+      glide(160);
+      set();
+    };
+    dial.glideTo = (v) => {
+      if (pressed) return;  // you're holding it
+      target = v;
+      glide(700);  // slower than your own moves: this is the dial learning
+    };
+    dial.addEventListener("pointerdown", () => { pressed = true; });
+    dial.addEventListener("input", () => {
+      target = +dial.value;
+      if (!pressed && !gliding) return show(target);
+      dial.value = shown;
+      if (!gliding) glide(140);
+    });
+    // pointerup too: a quick click can end before the needle moves, and then there's no change event.
+    dial.addEventListener("pointerup", settle);
+    dial.addEventListener("change", settle);
+    dial.addEventListener("keydown", (e) => {
+      const dir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+      if (!dir) return;
+      e.preventDefault();
+      target = tenth(tenth(target) + dir / 10);
+      glide(160);
+      set();
+    });
+  }
+
   // Background work (model download, indexing) in Settings: refresh the text until it's done.
   const progress = document.querySelector("[data-progress]");
   if (progress?.textContent) {
@@ -64,6 +126,23 @@
     else row.remove();
   });
 
+  // Onboarding sample step, the dials beside the stories: after a rating they glide to what was learned;
+  // move one yourself and it keeps learning from there, and a new set of stories is picked by it.
+  const learned = document.querySelector("[data-learned]");
+  const learnedDials = async () => {
+    if (!learned) return;
+    const weights = await (await fetch("/onboarding/weights")).json();
+    for (const dial of learned.querySelectorAll(".dial")) dial.glideTo(weights[dial.name]);
+  };
+  learned?.addEventListener("dial-set", async (e) => {
+    await fetch("/onboarding/weights", { method: "POST", body: new URLSearchParams({ name: e.target.name, value: e.detail }) });
+    const res = await fetch("/onboarding/sample/rows");
+    const list = document.querySelector(".rate-list");
+    if (!res.ok || !list) return;
+    list.innerHTML = await res.text();
+    if (!REDUCED) for (const row of list.children) row.classList.add("entering");
+  });
+
   // Onboarding sample step: a rating saves in the background, the tally counts up, and the story makes way
   // for a new one (none of the stories on screen; from another source if there is one).
   document.addEventListener("submit", async (e) => {
@@ -72,7 +151,8 @@
     const row = e.target.closest(".rate-row");
     const rating = e.submitter.value;
     for (const btn of e.target.querySelectorAll("button")) btn.disabled = true;  // one rating per story
-    save(e.target, new URLSearchParams({ rating }), () => location.reload());
+    // Wait for the save: the next story is picked by what this rating just taught.
+    const saved = save(e.target, new URLSearchParams({ rating }), () => location.reload());
 
     const tally = document.querySelector("[data-tally]");
     const kind = rating === "up" ? "liked" : "disliked";
@@ -84,6 +164,8 @@
       shown: rows.map((r) => r.dataset.id).join(","),
       sources: rows.filter((r) => r !== row).map((r) => r.dataset.source).join(","),
     });
+    await saved;
+    learnedDials();
     const res = await fetch(`/onboarding/sample/next?${query}`).catch(() => null);
     if (res?.status !== 200) return row.remove();  // nothing left to show
     const template = document.createElement("template");
@@ -96,7 +178,6 @@
   // Feed paging: split rows into pages that fit the viewport, so the page never
   // scrolls. Arrow buttons (and ←/→ keys) cycle through them, wrapping around.
   let paging = null;
-  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const LEAVE_MS = 120;
 
   function initPaging() {
@@ -356,59 +437,6 @@
       }
       noResults.hidden = any;
     });
-
-    // Ranking dials: a click glides the needle to the pointer, a drag follows it, and letting go settles
-    // on the nearest 0.1. The browser jumps the value straight to the pointer, so while a glide runs we
-    // put the value back and ease towards where it wanted to go.
-    const motion = !matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const tenth = (v) => Math.min(Math.max(Math.round(v * 10) / 10, 0), 1);
-    const easeOut = (t) => 1 - (1 - t) ** 3;
-    for (const dial of form.querySelectorAll(".dial")) {
-      let shown = +dial.value, target = shown, tween = 0, gliding = false, pressed = false;
-      const show = (v) => {
-        shown = v;
-        dial.value = v;
-        dial.style.setProperty("--v", v);
-        dial.nextElementSibling.value = tenth(v).toFixed(1);
-        dial.parentElement.toggleAttribute("data-off", tenth(v) === 0);
-      };
-      // Eases from where the needle is to `target`, which may keep moving while it runs.
-      const glide = (ms) => {
-        const id = ++tween, from = shown, start = performance.now();
-        gliding = true;
-        const frame = (now) => {
-          if (id !== tween) return;  // a newer glide took over
-          const t = motion ? Math.min((now - start) / ms, 1) : 1;
-          show(t < 1 ? from + (target - from) * easeOut(t) : target);
-          if (t < 1) requestAnimationFrame(frame);
-          else gliding = false;
-        };
-        requestAnimationFrame(frame);
-      };
-      const settle = () => {
-        if (target === tenth(target) && !pressed) return;  // pointerup and change both land here
-        pressed = false;
-        target = tenth(target);
-        glide(160);
-      };
-      dial.addEventListener("pointerdown", () => { pressed = true; });
-      dial.addEventListener("input", () => {
-        target = +dial.value;
-        if (!pressed && !gliding) return show(target);
-        dial.value = shown;
-        if (!gliding) glide(140);
-      });
-      // pointerup too: a quick click can end before the needle moves, and then there's no change event.
-      dial.addEventListener("pointerup", settle);
-      dial.addEventListener("change", settle);
-      dial.addEventListener("keydown", (e) => {
-        const dir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
-        if (!dir) return;
-        e.preventDefault();
-        target = tenth(tenth(target) + dir / 10);
-        glide(160);
-      });
-    }
 
     const notice = document.querySelector("[data-notice]");
     for (const btn of document.querySelectorAll("[data-not-yet]")) {

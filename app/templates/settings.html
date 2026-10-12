@@ -6,6 +6,7 @@
   </a>
 {% endblock %}
 {% from "_tabs.html" import tab_editor with context %}
+{% from "_dials.html" import dials %}
 {% block content %}
 <header class="masthead">
   <div>
@@ -22,15 +23,7 @@
       <span class="fold-label">Ranking</span>
       <span class="fold-count">for Recommended</span>
     </summary>
-    <ul class="sources">
-      {% for key, label in [("like", "Like what you open"), ("hidden", "Unlike what you hide"), ("fresh", "Fresh"), ("popular", "Popular")] %}
-      <li class="weight" {% if not weights[key] %}data-off{% endif %}>
-        <label for="weight-{{ key }}">{{ label }}</label>
-        <input type="range" class="dial" id="weight-{{ key }}" name="{{ key }}" min="0" max="1" step="any" value="{{ weights[key] }}" style="--v: {{ weights[key] }}">
-        <output for="weight-{{ key }}">{{ "%.1f" | format(weights[key]) }}</output>
-      </li>
-      {% endfor %}
-    </ul>
+    {{ dials(weights) }}
     {% if has_history %}
     {#- formaction: this sits inside the settings form, and forms can't nest. #}
     <p class="weight-foot" data-confirm><button type="submit" class="date-link" formaction="/history/clear" data-ask>Clear history</button><span data-sure hidden>Forget all history? <button type="submit" class="date-link" formaction="/history/clear">Yes</button> · <button type="button" class="date-link" data-cancel>No</button></span></p>

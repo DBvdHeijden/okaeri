@@ -22,7 +22,8 @@ def load() -> dict:
     if not PATH.exists():
         shutil.copy(EXAMPLE, PATH)
     # settings.json overrides the defaults key by key, so new settings reach existing users.
-    return json.loads(EXAMPLE.read_text()) | json.loads(PATH.read_text())
+    defaults, own = json.loads(EXAMPLE.read_text()), json.loads(PATH.read_text())
+    return defaults | own | {"ranking": defaults["ranking"] | own.get("ranking", {})}
 
 
 def reset() -> None:
@@ -116,6 +117,17 @@ def set_weights(weights: dict[str, float]) -> None:
     settings = load()
     # Tenths: the dials glide freely, but a weight is one of 0, 0.1, ... 1.
     settings["ranking"] = {k: round(min(max(weights[k], 0.0), 1.0), 1) for k in settings["ranking"]}
+    save(settings)
+
+
+def weight_nudges() -> dict[str, float]:
+    """How far you moved each dial from what onboarding learned; learning keeps that much on top."""
+    return load()["weight_nudges"]
+
+
+def set_weight_nudges(nudges: dict[str, float]) -> None:
+    settings = load()
+    settings["weight_nudges"] = nudges
     save(settings)
 
 

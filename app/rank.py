@@ -1,13 +1,15 @@
 """Ranking seam. Every article list shown to the user goes through rank().
 
-Latest is plain recency. Recommended adds up four signals, each scaled 0..1, with weights you set in Settings:
+Latest is plain recency. Recommended adds up five signals, each scaled 0..1, with weights in Settings:
 how close a story is to what you opened or liked, how fresh it is, how many points and comments it has,
-minus how close it is to what you hid. Your taste is learned from those events; the weights stay yours.
+a little chance, minus how close it is to what you hid. Onboarding learns the first four weights from
+your ratings (learn()); after that the weights are yours to tune. Chance is never learned.
 """
 
+import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import numpy as np
 
@@ -24,6 +26,7 @@ class Breakdown:
     hidden: float
     fresh: float
     popular: float
+    random: float
     nearest: str | None  # the key of the opened or liked story it's most like
     score: float
 
@@ -57,14 +60,58 @@ def explain(articles: Sequence[Article], events: Sequence[Event], settings: dict
     newest = rank(articles, events, settings)
     liked = {e.key for e in events if e.type == "click"} | switched_on(events, "seed", "unseed").keys()
     hidden = switched_on(events, "hide", "unhide")
+    sig, nearest = signals(newest, [k for k in liked if k in vectors], [k for k in hidden if k in vectors], vectors)
     w = settings["ranking"]
-    like, nearest = closeness(newest, [k for k in liked if k in vectors], vectors)
-    dislike, _ = closeness(newest, [k for k in hidden if k in vectors], vectors)
-    fresh = freshness(newest)
-    popular = popularity(newest)
-    score = w["like"] * like - w["hidden"] * dislike + w["fresh"] * fresh + w["popular"] * popular
-    rows = [Breakdown(*row) for row in zip(newest, like, dislike, fresh, popular, nearest, score)]
+    score = sum(w[name] * values for name, values in sig.items() if name != "hidden") - w["hidden"] * sig["hidden"]
+    rows = [Breakdown(*row) for row in zip(newest, *sig.values(), nearest, score)]
     return sorted(rows, key=lambda b: b.score, reverse=True)  # stable: equal scores stay newest first
+
+
+def signals(
+    articles: list[Article], liked: list[str], hidden: list[str], vectors: dict[str, np.ndarray]
+) -> tuple[dict[str, np.ndarray], list[str | None]]:
+    """Every signal for every story, 0..1, in Breakdown's order; and the liked story each is nearest to."""
+    like, nearest = closeness(articles, liked, vectors)
+    dislike, _ = closeness(articles, hidden, vectors)
+    sig = {"like": like, "hidden": dislike, "fresh": freshness(articles), "popular": popularity(articles), "random": chance(articles)}
+    return sig, nearest
+
+
+# Ratings before the learned weights count for half of what the ratings say: a few clicks steer, not swing.
+HALF_TRUST_AT = 5
+
+
+def learn(liked: list[Article], disliked: list[Article], vectors: dict[str, np.ndarray]) -> dict[str, float]:
+    """Weights from onboarding ratings. Each starts at 0.5 and moves by how much more of its signal the stories
+    you liked had than the ones you didn't (less of it, for hidden, which counts against).
+    Liking only fresh stories, say, turns Fresh up. Chance is left out: clicks would always turn it down."""
+    if not liked or not disliked:
+        return {name: 0.5 for name in ("like", "hidden", "fresh", "popular")}
+    rated = liked + disliked
+    sig, _ = signals(rated, [], [], vectors)
+    # A story isn't its own match, so a lone like (or dislike) has nothing to be like: wait for a second one.
+    if len(liked) >= 2:
+        sig["like"] = typical_closeness(rated, [a.key for a in liked if a.key in vectors], vectors)
+    if len(disliked) >= 2:
+        sig["hidden"] = typical_closeness(rated, [a.key for a in disliked if a.key in vectors], vectors)
+    trust = len(rated) / (len(rated) + HALF_TRUST_AT)
+    gap = {name: sig[name][: len(liked)].mean() - sig[name][len(liked) :].mean() for name in ("like", "hidden", "fresh", "popular")}
+    gap["hidden"] = -gap["hidden"]
+    return {name: float(np.clip(0.5 + g * trust, 0, 1)) for name, g in gap.items()}
+
+
+def typical_closeness(articles: list[Article], keys: list[str], vectors: dict[str, np.ndarray]) -> np.ndarray:
+    """Like closeness(), but the average over `keys` rather than the nearest, as a percentile. For learning:
+    a story you rated down has one more liked story to be near than one you rated up, and the nearest of
+    more stories is closer by chance; an average isn't."""
+    out = np.zeros(len(articles))
+    embedded = [i for i, a in enumerate(articles) if a.key in vectors]
+    if len(keys) < 2 or not embedded:
+        return out
+    sims = np.array([vectors[articles[i].key] for i in embedded]) @ np.array([vectors[k] for k in keys]).T
+    sims[np.array([[articles[i].key == k for k in keys] for i in embedded])] = np.nan  # not itself
+    out[embedded] = percentile(np.nanmean(sims, axis=1))
+    return out
 
 
 def percentile(values: np.ndarray) -> np.ndarray:
@@ -98,6 +145,14 @@ def freshness(articles: list[Article]) -> np.ndarray:
     now = datetime.now(UTC)
     days = np.array([(now - a.published_at).total_seconds() / 86400 / MAX_AGE_DAYS[format_of(a)] for a in articles])
     return np.clip(1 - days, 0, 1)
+
+
+def chance(articles: list[Article]) -> np.ndarray:
+    """A roll of the dice per story, the same all day: so you don't get stuck in what you already like,
+    and a reload doesn't reshuffle the page."""
+    day = date.today().isoformat()
+    rolls = [hashlib.blake2b(f"{day}:{a.key}".encode(), digest_size=8).digest() for a in articles]
+    return np.array([int.from_bytes(r) / 2**64 for r in rolls])
 
 
 def popularity(articles: list[Article]) -> np.ndarray:

@@ -5,7 +5,8 @@
     "formats": [],
     "topics": []
   },
-  "ranking": {"like": 1.0, "hidden": 0.6, "fresh": 0.6, "popular": 0.3},
+  "ranking": {"like": 0.5, "hidden": 0.5, "fresh": 0.5, "popular": 0.5, "random": 0.5},
+  "weight_nudges": {},
   "sources": {
     "enabled": []
   },

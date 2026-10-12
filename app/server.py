@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -18,7 +18,7 @@ from app import settings
 from app.embed import model_downloaded, pending, stored_vectors
 from app.fetch import Refresher
 from app.models import Article, Source
-from app.rank import rank, sample, switched_on
+from app.rank import learn, rank, sample, switched_on
 from app.sources import (
     BY_ID, FORMATS, LANGUAGES, SOURCES, TAG_DESCRIPTIONS, TOPICS, format_of, in_tab, source_format, source_matches, speaks,
 )
@@ -254,14 +254,15 @@ def settings_submit(
     hidden: Annotated[float | None, Form()] = None,
     fresh: Annotated[float | None, Form()] = None,
     popular: Annotated[float | None, Form()] = None,
+    surprise: Annotated[float | None, Form(alias="random")] = None,  # not `random`: that's the module
 ):
     # At least one language: unticking them all keeps the ones you had.
     if picked := [lang for lang in languages or [] if lang in LANGUAGES]:
         settings.set_languages(picked)
     # Sources in a language you dropped go too.
     settings.set_enabled_sources([i for i in sources or [] if i in BY_ID and speaks(BY_ID[i], settings.languages())])
-    if None not in (like, hidden, fresh, popular):
-        settings.set_weights({"like": like, "hidden": hidden, "fresh": fresh, "popular": popular})
+    if None not in (like, hidden, fresh, popular, surprise):
+        settings.set_weights({"like": like, "hidden": hidden, "fresh": fresh, "popular": popular, "random": surprise})
     if tabs is not None:
         settings.set_tabs(json.loads(tabs))
     wake_refresher(request)
@@ -384,8 +385,9 @@ def onboarding_sources_submit(request: Request, sources: Annotated[list[str] | N
     return RedirectResponse("/onboarding/sample", status_code=303)
 
 
-def sample_pool() -> list[Article]:
-    """Stories from your sources that fit your interests and that you haven't rated yet, shuffled."""
+def sample_pool(shuffle: bool = False) -> list[Article]:
+    """Stories from your sources that fit your interests and that you haven't rated yet: best first by the
+    weights learned so far (which Surprise keeps from narrowing too fast), or shuffled, to explore."""
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     interests = settings.interests()
     pool = [
@@ -394,20 +396,24 @@ def sample_pool() -> list[Article]:
     ]
     events = store().events()
     rated = switched_on(events, "seed", "unseed") | switched_on(events, "hide", "unhide")
-    unrated = [a for a in rank(pool, events, settings.load()) if a.key not in rated]
-    random.shuffle(unrated)  # a different few on every load: that's the "show others" button
+    sort = "latest" if shuffle else "recommended"
+    unrated = [a for a in rank(pool, events, settings.load(), stored_vectors(store()), sort) if a.key not in rated]
+    if shuffle:
+        random.shuffle(unrated)
     return unrated
 
 
 @app.get("/onboarding/sample", response_class=HTMLResponse)
-def onboarding_sample(request: Request):
+def onboarding_sample(request: Request, shuffle: bool = False):
+    """Stories to rate, picked by the dials beside them; "Show others" shuffles instead."""
     selected = [i for i in settings.enabled_sources() if i in BY_ID]
     events = store().events()
     return templates.TemplateResponse(
         request,
         "onboarding_sample.html",
         {
-            "articles": sample(sample_pool(), SAMPLE_SIZE),
+            "articles": sample(sample_pool(shuffle), SAMPLE_SIZE),
+            "weights": settings.weights(),
             "pending": store().pending(selected),
             "liked": len(switched_on(events, "seed", "unseed")),
             "disliked": len(switched_on(events, "hide", "unhide")),
@@ -417,12 +423,37 @@ def onboarding_sample(request: Request):
 
 @app.get("/onboarding/sample/next", response_class=HTMLResponse)
 def onboarding_sample_next(request: Request, shown: str = "", sources: str = ""):
-    """One new story to replace one you just rated: not on screen yet, from a source not on screen if possible."""
+    """One new story to replace one you just rated: the best match so far, not on screen yet, and from a source
+    not on screen if possible."""
     pool = [a for a in sample_pool() if a.id not in shown.split(",")]
     if not pool:
         return Response(status_code=204)
     fresh = [a for a in pool if a.source_id not in sources.split(",")] or pool
     return templates.TemplateResponse(request, "_sample_row.html", {"a": fresh[0]})
+
+
+@app.get("/onboarding/sample/rows", response_class=HTMLResponse)
+def onboarding_sample_rows(request: Request):
+    """A whole new set to rate, after you moved a dial."""
+    rows = sample(sample_pool(), SAMPLE_SIZE)
+    return HTMLResponse("".join(templates.get_template("_sample_row.html").render(a=a) for a in rows))
+
+
+@app.get("/onboarding/weights")
+def onboarding_weights():
+    return JSONResponse(settings.weights())
+
+
+@app.post("/onboarding/weights")
+def onboarding_weights_submit(
+    name: Annotated[Literal["like", "hidden", "fresh", "popular", "random"], Form()], value: Annotated[float, Form()]
+):
+    """A dial you moved while onboarding learns: it keeps learning, but stays this far from what's learned."""
+    learned = learned_weights()
+    if name in learned:
+        settings.set_weight_nudges(settings.weight_nudges() | {name: value - learned[name]})
+    settings.set_weights(settings.weights() | {name: value})
+    return Response(status_code=204)
 
 
 @app.get("/onboarding/tabs", response_class=HTMLResponse)
@@ -435,6 +466,25 @@ def onboarding_tabs_submit(tabs: Annotated[str | None, Form()] = None):  # JSON 
     if tabs is not None:
         settings.set_tabs(json.loads(tabs))
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/onboarding/rate/{id}")
+def onboarding_rate(request: Request, id: str, rating: Annotated[Literal["up", "down", "none"], Form()]):
+    """A rating, and the weights learned again from all of them. Only here: afterwards the weights are yours."""
+    response = rate(request, id, rating)
+    nudges = settings.weight_nudges()
+    learned = {k: min(max(v + nudges.get(k, 0), 0), 1) for k, v in learned_weights().items()}
+    settings.set_weights(settings.weights() | learned)
+    return response
+
+
+def learned_weights() -> dict[str, float]:
+    """The weights your onboarding ratings teach, before any nudges of yours."""
+    events = store().events()
+    stories = {a.key: a for a in store().articles(BY_ID)}  # with their real publish times, for freshness
+    liked = [stories[k] for k in switched_on(events, "seed", "unseed") if k in stories]
+    disliked = [stories[k] for k in switched_on(events, "hide", "unhide") if k in stories]
+    return learn(liked, disliked, stored_vectors(store()))
 
 
 @app.post("/rate/{id}")

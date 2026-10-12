@@ -1,11 +1,19 @@
+{% from "_stats.html" import stat, points_icon, comments_icon %}
 {#- One story to rate on onboarding step 4; also sent alone, to replace a story you just rated. #}
 <li class="rate-row" data-id="{{ a.id }}" data-source="{{ a.source_id }}">
   <span class="source-text">
     <a class="source-name" href="/r/{{ a.id }}" target="_blank" rel="noopener">{{ a.title }}</a>
-    <span class="source-desc">{{ a.source }}</span>
+    {%- set when = a.published_at | ago %}
+    {#- One span per part; the stylesheet puts a dash between them, as on the homepage. #}
+    <span class="meta">
+      <span>{{ a.source }}</span>
+      <span><time datetime="{{ a.published_at.isoformat() }}">{{ "just now" if when == "now" else when ~ " ago" }}</time></span>
+      {%- if a.score is not none %}<span>{{ stat(a.score, "point", points_icon) }}</span>{% endif %}
+      {%- if a.comments is not none %}<span>{{ stat(a.comments, "comment", comments_icon) }}</span>{% endif %}
+    </span>
   </span>
   {#- Without JS each button posts and the page reloads with a fresh few; with JS the story is swapped in place. #}
-  <form method="post" action="/rate/{{ a.id }}" class="rate" data-rate>
+  <form method="post" action="/onboarding/rate/{{ a.id }}" class="rate" data-rate>
     <button type="submit" class="icon-btn" name="rating" value="up" aria-label="More like this">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
     </button>
