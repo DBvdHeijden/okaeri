@@ -110,7 +110,8 @@ def weights() -> dict[str, float]:
 
 def set_weights(weights: dict[str, float]) -> None:
     settings = load()
-    settings["ranking"] = {k: min(max(weights[k], 0.0), 1.0) for k in settings["ranking"]}
+    # Tenths: the dials glide freely, but a weight is one of 0, 0.1, ... 1.
+    settings["ranking"] = {k: round(min(max(weights[k], 0.0), 1.0), 1) for k in settings["ranking"]}
     save(settings)
 
 

@@ -18,7 +18,7 @@ from app import settings
 from app.embed import model_downloaded, pending, stored_vectors
 from app.fetch import Refresher
 from app.models import Article, Source
-from app.rank import explain, rank, sample, switched_on
+from app.rank import rank, sample, switched_on
 from app.sources import (
     BY_ID, FORMATS, LANGUAGES, SOURCES, TAG_DESCRIPTIONS, TOPICS, format_of, in_tab, source_format, source_matches, speaks,
 )
@@ -30,7 +30,6 @@ HERE = Path(__file__).parent
 PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 SAMPLE_SIZE = 5
 HISTORY_SIZE = 100
-RANKING_EXAMPLES = 5  # top stories broken down in Settings
 HISTORY_VIEWS = {"opened": "Opened", "liked": "Liked", "hidden": "Hidden"}
 
 FORMAT_GROUPS = {"paper": "Papers", "blog": "Blogs", "forum": "Forums", "news": "News"}  # onboarding sections
@@ -242,21 +241,7 @@ def settings_page(request: Request):
 
 
 def ranking_context() -> dict:
-    """What Recommended learns from, and how its current top stories score."""
-    events = store().events()
-    pool = store().articles({i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID})
-    top = explain(pool, events, settings.load(), stored_vectors(store()))[:RANKING_EXAMPLES]
-    nearest = store().stories({b.nearest: datetime.now(UTC) for b in top if b.nearest}, BY_ID)
-    return {
-        "weights": settings.weights(),
-        "learned": {
-            "opened": len({e.key for e in events if e.type == "click"}),
-            "liked": len(switched_on(events, "seed", "unseed")),
-            "hidden": len(switched_on(events, "hide", "unhide")),
-        },
-        "top": top,
-        "titles": {a.key: a.title for a in nearest},
-    }
+    return {"weights": settings.weights(), "has_history": bool(store().events())}
 
 
 @app.post("/settings")

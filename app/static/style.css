@@ -480,15 +480,37 @@ h1 {
 .tag-check:checked + span { background: var(--text); border-color: var(--text); color: var(--bg); }
 .tag-check:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Ranking: a slider per signal, then the top of Recommended taken apart */
-.weight { display: flex; align-items: center; gap: 16px; min-height: 44px; padding: 10px 0; }
-.weight input { width: 120px; accent-color: var(--text); }
-.weight output { width: 28px; font: 13px var(--mono); color: var(--muted); text-align: right; }
-.why-note { margin: 16px 0 8px; color: var(--muted); font-size: 14px; line-height: 1.4; }
-.why { margin: 0 0 16px; padding-left: 20px; }
-.why li { margin-bottom: 10px; }
-.why .source-name { display: block; font-weight: 400; }
-.why-parts { font: 12px var(--mono); color: var(--muted); }
+/* Ranking: one dial per signal. A hairline with a tick per 0.1, inked up to a thin needle;
+   --v (0..1) is the value, kept current by app.js. Ticks and fill are inset by half the needle. */
+.weight { display: grid; grid-template-columns: minmax(0, 1fr) min(200px, 45%) 2.5ch; align-items: center; gap: 16px; min-height: 52px; }
+.weight label { transition: opacity 120ms ease; }
+.weight[data-off] label { opacity: 0.5; }
+.weight output { font: 13px var(--mono); color: var(--muted); text-align: right; }
+
+.dial { appearance: none; width: 100%; height: 28px; margin: 0; background: none; cursor: pointer; }
+.dial::-webkit-slider-runnable-track { height: 28px; background: var(--dial-track); }
+.dial::-moz-range-track { height: 28px; background: var(--dial-track); }
+.dial {
+  --dial-track:
+    linear-gradient(var(--text), var(--text)) 1px 50% / calc(var(--v) * (100% - 2px)) 1.5px no-repeat,
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--muted) 45%, transparent) 0 1px, transparent 1px calc((100% - 1px) / 10)) 0.5px 50% / calc(100% - 1px) 7px no-repeat,
+    linear-gradient(var(--line), var(--line)) 0 50% / 100% 1px no-repeat;
+}
+.dial::-webkit-slider-thumb {
+  appearance: none;
+  width: 2px;
+  height: 14px;
+  margin-top: 7px;
+  border-radius: 1px;
+  background: var(--text);
+  transition: height 120ms ease, margin-top 120ms ease;
+}
+.dial:is(:hover, :active, :focus-visible)::-webkit-slider-thumb { height: 20px; margin-top: 4px; }
+.dial::-moz-range-thumb { width: 2px; height: 14px; border: 0; border-radius: 1px; background: var(--text); transition: height 120ms ease; }
+.dial:is(:hover, :active, :focus-visible)::-moz-range-thumb { height: 20px; }
+.dial:focus-visible { outline-offset: 4px; }
+
+.weight-foot { margin: 8px 0 16px; text-align: right; font: 13px var(--mono); color: var(--muted); }
 
 .add-tab { margin: 0 0 8px 12px; }
 .add-tab[hidden] { display: none; }

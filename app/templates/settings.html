@@ -22,44 +22,19 @@
       <span class="fold-label">Ranking</span>
       <span class="fold-count">for Recommended</span>
     </summary>
-    {%- set signals = [
-      ("like", "Like what you open", "Stories close to ones you opened or liked rise."),
-      ("hidden", "Less like what you hide", "Stories close to ones you hid sink."),
-      ("fresh", "Fresh", "Newer stories rise; news fades in days, blogs in weeks."),
-      ("popular", "Popular", "Stories with many points and comments for their source rise."),
-    ] %}
     <ul class="sources">
-      {% for key, label, desc in signals %}
-      <li>
-        <label class="weight">
-          <span class="source-text">
-            <span class="source-name">{{ label }}</span>
-            <span class="source-desc">{{ desc }}</span>
-          </span>
-          <input type="range" name="{{ key }}" min="0" max="1" step="0.1" value="{{ weights[key] }}" oninput="this.nextElementSibling.value = (+this.value).toFixed(1)">
-          <output>{{ "%.1f" | format(weights[key]) }}</output>
-        </label>
+      {% for key, label in [("like", "Like what you open"), ("hidden", "Unlike what you hide"), ("fresh", "Fresh"), ("popular", "Popular")] %}
+      <li class="weight" {% if not weights[key] %}data-off{% endif %}>
+        <label for="weight-{{ key }}">{{ label }}</label>
+        <input type="range" class="dial" id="weight-{{ key }}" name="{{ key }}" min="0" max="1" step="any" value="{{ weights[key] }}" style="--v: {{ weights[key] }}">
+        <output for="weight-{{ key }}">{{ "%.1f" | format(weights[key]) }}</output>
       </li>
       {% endfor %}
     </ul>
-    <p class="why-note">Learning from {{ learned.opened }} opened, {{ learned.liked }} liked and {{ learned.hidden }} hidden {{ "story" if learned.opened + learned.liked + learned.hidden == 1 else "stories" }}. Each signal is scored 0 to 1 and multiplied by its weight.
-      {% if learned.opened + learned.liked + learned.hidden %}
-      {# formaction: this sits inside the settings form, and forms can't nest. #}
-      <button type="submit" class="date-link" formaction="/history/clear" onclick="return confirm('Forget every opened, liked and hidden story? Recommended starts learning from scratch.')">Clear history</button>
-      {%- endif %}</p>
-    <p class="why-note">Recommended starts with:</p>
-    <ol class="why">
-      {% for b in top %}
-      <li>
-        <span class="source-name">{{ b.article.title }}</span>
-        <span class="why-parts">
-          like {{ "%.2f" | format(b.like) }}{% if b.nearest in titles %} ≈ “{{ titles[b.nearest] }}”{% endif %}
-          · fresh {{ "%.2f" | format(b.fresh) }} · popular {{ "%.2f" | format(b.popular) }}
-          {%- if b.hidden %} · hidden −{{ "%.2f" | format(b.hidden) }}{% endif %} → {{ "%.2f" | format(b.score) }}
-        </span>
-      </li>
-      {% endfor %}
-    </ol>
+    {% if has_history %}
+    {#- formaction: this sits inside the settings form, and forms can't nest. #}
+    <p class="weight-foot"><button type="submit" class="date-link" formaction="/history/clear" onclick="return confirm('Forget every opened, liked and hidden story? Recommended starts learning from scratch.')">Clear history</button></p>
+    {% endif %}
   </details>
 
   <details class="fold" data-tabs data-max="{{ max_tabs }}">
