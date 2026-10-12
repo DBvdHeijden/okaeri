@@ -23,6 +23,20 @@
     });
   }
 
+  // Ask before doing something that can't be undone, in the line itself: the link becomes "Sure? Yes · No".
+  // Without JS the link just does it.
+  for (const box of document.querySelectorAll("[data-confirm]")) {
+    const ask = box.querySelector("[data-ask]"), sure = box.querySelector("[data-sure]");
+    const asking = (on) => {
+      ask.hidden = on;
+      sure.hidden = !on;
+      (on ? sure.querySelector("[type=submit]") : ask).focus();
+    };
+    ask.addEventListener("click", (e) => { e.preventDefault(); asking(true); });
+    box.querySelector("[data-cancel]").addEventListener("click", () => asking(false));
+    sure.addEventListener("keydown", (e) => { if (e.key === "Escape") asking(false); });
+  }
+
   // Background work (model download, indexing) in Settings: refresh the text until it's done.
   const progress = document.querySelector("[data-progress]");
   if (progress?.textContent) {

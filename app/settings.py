@@ -25,6 +25,10 @@ def load() -> dict:
     return json.loads(EXAMPLE.read_text()) | json.loads(PATH.read_text())
 
 
+def reset() -> None:
+    shutil.copy(EXAMPLE, PATH)
+
+
 def save(settings: dict) -> None:
     PATH.write_text(json.dumps(settings, indent=2) + "\n")
 

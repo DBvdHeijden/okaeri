@@ -100,9 +100,12 @@ def test_show_more(store):
 
 
 def test_onboarding_lists_sources_and_checks_selected(store):
+    settings.set_interests(["forum"], ["ai"])
     settings.set_enabled_sources(["hn"])
     html = client.get("/onboarding/sources").text
-    assert all(s.name in html for s in SOURCES)
+    assert all(s.name in html for s in SOURCES if "ai" in s.tags)
+    assert "Hacker News" in html  # no field at all: offered with any
+    assert "eLife" not in html  # biology only: left for Settings
     assert re.search(r'value="hn" checked', html)
     assert not re.search(r'value="lobsters" checked', html)
 

@@ -287,8 +287,10 @@ def clear_history():
 
 @app.post("/onboarding/redo")
 def onboarding_redo():
-    """Start over from Settings: likes and dislikes go too. Taken back as events, so the log stays whole;
-    a dislike is a hide, so stories hidden on the homepage come back as well. Opened stories stay."""
+    """Start over from Settings, as on the first run: every setting goes back to its default, and likes and
+    dislikes go too. Those are taken back as events, so the log stays whole; a dislike is a hide, so stories
+    hidden on the homepage come back as well. Opened stories stay."""
+    settings.reset()  # otherwise old answers, like the sources you followed, prefill the new steps
     events = store().events()
     for key in switched_on(events, "seed", "unseed"):
         store().add_event("unseed", key)
@@ -299,7 +301,7 @@ def onboarding_redo():
 
 @app.get("/onboarding", response_class=HTMLResponse)
 def onboarding_name(request: Request, redo: bool = False):
-    # A redo starts from your current answers; nothing changes until you submit each step.
+    # Once set up, only a redo (or Back from the next step) comes here.
     if settings.enabled_sources() and not redo:
         return RedirectResponse("/settings", status_code=303)
     return templates.TemplateResponse(request, "onboarding_name.html", {"name": settings.name()})
@@ -355,13 +357,21 @@ def onboarding_interests_submit(
 def onboarding_sources(request: Request):
     interests = settings.interests()
     spoken = spoken_sources()
-    matching = [s for s in spoken if source_matches(s, interests["formats"], interests["topics"])]
-    groups = [(label, [s for s in matching if source_format(s) == f]) for f, label in FORMAT_GROUPS.items()]
-    groups.append(("Other sources", [s for s in spoken if s not in matching]))
     # First time through, everything that matches starts checked.
-    selected = settings.enabled_sources() or [s.id for s in matching]
+    selected = settings.enabled_sources() or [
+        s.id for s in spoken if source_matches(s, interests["formats"], interests["topics"])
+    ]
+    # A fold per field you picked, as in the step before; each source once, under the first of yours it covers.
+    # Sources in none of your fields aren't offered here: onboarding stays short, and Settings has them all.
+    groups: dict[str, list[Source]] = {t: [] for t in interests["topics"]} | {"general": []}
+    for s in spoken:
+        own = set(s.tags) & TOPICS
+        field = next((t for t in interests["topics"] if t in own), None if own else "general")
+        if field:
+            groups[field].append(s)
+    groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items() if sources}
     return templates.TemplateResponse(
-        request, "onboarding_sources.html", {"groups": [g for g in groups if g[1]], "selected": selected}
+        request, "onboarding_sources.html", {"groups": list(groups.items()), "selected": selected}
     )
 
 

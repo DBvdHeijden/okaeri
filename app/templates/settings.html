@@ -11,8 +11,8 @@
   <div>
     <p class="kicker" lang="ja">設定</p>
     <h1>Settings</h1>
-    {#- A post, not a link: starting over clears your likes and dislikes. #}
-    <form class="date" method="post" action="/onboarding/redo">Following {{ selected | length | count("source") }} · <button type="submit" class="date-link">Redo onboarding</button></form>
+    {#- A post, not a link: starting over resets your settings, likes and dislikes. #}
+    <form class="date" method="post" action="/onboarding/redo">Following {{ selected | length | count("source") }} · <span data-confirm><button type="submit" class="date-link" data-ask>Redo onboarding</button><span data-sure hidden>Start over? <button type="submit" class="date-link">Yes</button> · <button type="button" class="date-link" data-cancel>No</button></span></span></form>
   </div>
 </header>
 
@@ -33,7 +33,7 @@
     </ul>
     {% if has_history %}
     {#- formaction: this sits inside the settings form, and forms can't nest. #}
-    <p class="weight-foot"><button type="submit" class="date-link" formaction="/history/clear" onclick="return confirm('Forget every opened, liked and hidden story? Recommended starts learning from scratch.')">Clear history</button></p>
+    <p class="weight-foot" data-confirm><button type="submit" class="date-link" formaction="/history/clear" data-ask>Clear history</button><span data-sure hidden>Forget all history? <button type="submit" class="date-link" formaction="/history/clear">Yes</button> · <button type="button" class="date-link" data-cancel>No</button></span></p>
     {% endif %}
   </details>
 

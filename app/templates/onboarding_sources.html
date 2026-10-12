@@ -36,9 +36,9 @@
     <ul class="sources">
       {% for s in sources %}
       <li>
-        <label class="source" data-name="{{ (s.name ~ ' ' ~ s.description ~ ' ' ~ s.site ~ ' ' ~ s.language) | lower }}">
+        <label class="source" data-name="{{ (s.name ~ ' ' ~ s.description ~ ' ' ~ s.site ~ ' ' ~ s.language ~ ' ' ~ source_format(s)) | lower }}">
           <span class="source-text">
-            <span class="source-name">{{ s.name }} <span class="source-site">{{ s.site }} · {{ s.language }}</span></span>
+            <span class="source-name">{{ s.name }} <span class="source-site">{{ s.site }} · {{ source_format(s) }} · {{ s.language }}</span></span>
             <span class="source-desc">{{ s.description }}</span>
           </span>
           <input type="checkbox" class="check" aria-label="{{ s.name }}" name="sources" value="{{ s.id }}" {% if s.id in selected %}checked{% endif %}>
