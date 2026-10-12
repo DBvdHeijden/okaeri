@@ -136,6 +136,13 @@ def home(
     )
 
 
+@app.post("/sort/{tab}")
+def sort_tab(tab: str, sort: Annotated[Literal["latest", "recommended"], Form()]):
+    if not settings.set_sort(tab, sort):
+        raise HTTPException(404)
+    return RedirectResponse(f"/?tab={tab}", status_code=303)
+
+
 def background_work(request: Request) -> str:
     """What the embedding child is doing, shown in Settings; empty when nothing runs."""
     refresher = getattr(request.app.state, "refresher", None)

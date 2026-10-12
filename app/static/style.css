@@ -191,18 +191,21 @@ h1 {
 .tabs a[aria-current="page"]:hover { background: none; }
 .tabs a[data-history]:last-child { margin-left: auto; }
 
-/* History: Opened · Liked · Hidden, quieter than the tabs above it. */
-.history-views { display: flex; gap: 2px; margin: 0 0 8px -10px; }
-.history-views a {
+/* Under the tabs: Latest · Recommended, or History's Opened · Liked · Hidden. Quieter than the tabs. */
+.view-switch { display: flex; gap: 2px; margin: 0 0 8px -10px; }
+.view-switch a, .view-switch button {
   padding: 4px 10px;
+  border: 0;
   border-radius: 6px;
+  background: none;
   font: 13px var(--mono);
   color: var(--muted);
   text-decoration: none;
+  cursor: pointer;
 }
-.history-views a:hover { color: var(--text); background: var(--chip); }
-.history-views a[aria-current="page"] { color: var(--text); }
-.history-views a[aria-current="page"]:hover { background: none; }
+.view-switch :is(a, button):hover { color: var(--text); background: var(--chip); }
+.view-switch [aria-current] { color: var(--text); }
+.view-switch [aria-current]:hover { background: none; }
 .history-undo { align-self: center; }
 
 /* Feed */

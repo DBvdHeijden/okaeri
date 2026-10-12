@@ -25,11 +25,18 @@
 {% endif %}
 
 {% if tab.history %}
-<nav class="history-views" aria-label="Show">
+<nav class="view-switch" aria-label="Show">
   {% for view, label in history_views.items() %}
   <a href="/?tab={{ tab.slug }}&amp;show={{ view }}" {% if view == show %}aria-current="page"{% endif %}>{{ label }}</a>
   {% endfor %}
 </nav>
+{% else %}
+{#- A post, not a link: the choice is saved for this tab. #}
+<form class="view-switch" method="post" action="/sort/{{ tab.slug }}" aria-label="Sort">
+  {% for sort in ("latest", "recommended") %}
+  <button type="submit" name="sort" value="{{ sort }}" {% if sort == tab.sort %}aria-current="true"{% endif %}>{{ sort | capitalize }}</button>
+  {% endfor %}
+</form>
 {% endif %}
 
 {% if articles %}

@@ -90,6 +90,17 @@ def set_enabled_sources(source_ids: list[str]) -> None:
     save(settings)
 
 
+def set_sort(tab_slug: str, sort: str) -> bool:
+    """Set one tab's sort, from the switch on the homepage. False if there's no such tab."""
+    settings = load()
+    for tab in settings["tabs"]:
+        if tab.get("builtin", slug(tab.get("name", ""))) == tab_slug and tab_slug != "history":
+            tab["sort"] = sort
+            save(settings)
+            return True
+    return False
+
+
 def set_tabs(rows: list[dict]) -> None:
     """Rows from the tab editor: custom tabs need a unique name; All and History can only be hidden."""
     builtin = {row["builtin"]: row for row in rows if row.get("builtin") in ("all", "history")}
