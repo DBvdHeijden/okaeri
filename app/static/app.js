@@ -113,17 +113,21 @@
       pager.hidden = pages.length < 2;
     };
 
+    // The rows on screen leave quickly. Shared by the pager and by switching tabs or views.
+    const leave = async () => {
+      if (REDUCED) return;
+      for (const row of pages[current]) {
+        row.classList.remove("entering");
+        row.classList.add("leaving");
+      }
+      await new Promise((r) => setTimeout(r, LEAVE_MS));
+    };
+
     // Rows leave quickly, then the next page loads in top to bottom.
     const move = async (d) => {
       const token = ++moving;
-      if (!REDUCED) {
-        for (const row of pages[current]) {
-          row.classList.remove("entering");
-          row.classList.add("leaving");
-        }
-        await new Promise((r) => setTimeout(r, LEAVE_MS));
-        if (token !== moving) return;
-      }
+      await leave();
+      if (token !== moving) return;
       show(current + d, true);
     };
 
@@ -157,13 +161,37 @@
       paginate();
     };
 
-    paging = { pager, paginate, move, remove };
+    paging = { pager, paginate, move, remove, leave };
     paginate(true);
   }
 
   document.addEventListener("click", (e) => {
     if (e.target.closest("[data-prev]")) paging?.move(-1);
     else if (e.target.closest("[data-next]")) paging?.move(1);
+  });
+
+  // Switching tabs or views (Latest / Recommended, Opened / Liked / Hidden) goes like turning a page: the rows
+  // leave first, and the new page's rows load in as usual. Ctrl/Cmd-click etc. still open a new tab.
+  document.addEventListener("click", async (e) => {
+    const link = e.target.closest(".tabs a, .view-switch a");
+    if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    await paging?.leave();
+    location.href = link.href;
+  });
+  document.addEventListener("submit", async (e) => {
+    const form = e.target;
+    if (!form.matches(".view-switch") || "left" in form.dataset) return;  // the second time round, it goes
+    e.preventDefault();
+    await paging?.leave();
+    form.dataset.left = "";
+    form.requestSubmit(e.submitter);
+  });
+  // Coming back with the browser's back button can restore the page as it was left: rows faded out.
+  addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    for (const row of document.querySelectorAll(".row.leaving")) row.classList.remove("leaving");
+    for (const form of document.querySelectorAll(".view-switch[data-left]")) delete form.dataset.left;
   });
   document.addEventListener("keydown", (e) => {
     if (!paging || paging.pager.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
