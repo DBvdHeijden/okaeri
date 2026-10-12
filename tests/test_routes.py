@@ -124,7 +124,8 @@ def test_counts_shown_with_comment_link(store):
                                  discussion_url="https://news.ycombinator.com/item?id=9")], None, None)
     html = client.get("/").text
     assert "1,516 points" in html
-    assert f'<a href="/r/{article_id("e.com/a")}?to=thread" target="_blank" rel="noopener">1 comment</a>' in html
+    link = re.search(rf'<a href="/r/{article_id("e.com/a")}\?to=thread"[^>]*>(.*?)</a>', html, re.S)
+    assert link and 'title="1 comment"' in link.group(1)
 
 
 def tab_labels(html: str) -> list[str]:

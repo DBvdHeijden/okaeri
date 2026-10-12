@@ -246,15 +246,20 @@ h1 {
 .title:hover { color: var(--accent); }
 .title:visited { color: var(--muted); }
 
+/* Under a title: quieter than the muted text elsewhere, its parts split by a dash (one span each). */
 .meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.4em;
   margin: 1px 0 0;
-  color: var(--muted);
-  font-size: 13px;
+  color: color-mix(in srgb, var(--muted) 75%, var(--bg));
+  font-size: 12.5px;
   line-height: 1.4;
 }
-.meta a { text-decoration: none; }
-.meta .format { font: 400 11px/1 var(--mono); opacity: 0.8; }
-.meta a:hover { color: var(--accent); }
+.meta > span + span::before { content: "\2013"; margin-right: 0.4em; }
+.meta a { color: inherit; text-decoration: none; }
+.stat svg { vertical-align: -2px; margin-right: 3px; }  /* inline, so the dash before it stays on the line */
+.meta a:hover { color: var(--text); }
 
 .hide-btn {
   align-self: center;
