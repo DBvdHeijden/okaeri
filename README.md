@@ -7,6 +7,8 @@ Each tab shows stories newest first, or recommended: a small embedding model on 
 open, like and hide, and puts the most relevant stories on top. Your reading history never leaves your device. 
 Your recommendation algorithm is yours, tune it however you'd like. 
 
+![The okaeri homepage: a list of today's stories, with a slowly turning Lorenz figure beside it](.github/screenshot.png)
+
 ## Requirements
 
 - macOS or Linux
