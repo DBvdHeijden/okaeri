@@ -135,8 +135,8 @@
     const token = ++tuning;
     const body = new URLSearchParams({ name: e.target.name, value: e.detail });
     await (saving = saving.then(() => fetch("/onboarding/weights", { method: "POST", body })));
-    const res = await fetch("/onboarding/tune/top");
     const list = document.querySelector("[data-top]");
+    const res = await fetch(`/onboarding/tune/top?${new URLSearchParams({ field: list?.dataset.field ?? "" })}`);
     if (!res.ok || !list || token !== tuning) return;
     const template = document.createElement("template");
     template.innerHTML = await res.text();

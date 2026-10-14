@@ -474,24 +474,28 @@ def onboarding_sample_next(request: Request, shown: str = "", sources: str = "",
     return templates.TemplateResponse(request, "_sample_row.html", {"a": fresh[0]})
 
 
-def top_stories() -> list[Article]:
-    """What All would show first, by Recommended, with the weights as they are now."""
+def top_stories(field: str = "") -> list[Article]:
+    """What All would show first, by Recommended, with the weights as they are now; or just one field's stories.
+    The same weights either way: a field only narrows what you see."""
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
-    return feed(selected, {**settings.ALL_TAB, "sort": "recommended"})[:TOP_SIZE]
+    tab = {**settings.ALL_TAB, "sort": "recommended", "topics": [field] if field else []}
+    return feed(selected, tab)[:TOP_SIZE]
 
 
 @app.get("/onboarding/tune", response_class=HTMLResponse)
-def onboarding_tune(request: Request):
+def onboarding_tune(request: Request, field: str = ""):
     return templates.TemplateResponse(
-        request, "onboarding_tune.html", {"articles": top_stories(), "weights": settings.weights()}
+        request,
+        "onboarding_tune.html",
+        {"articles": top_stories(field), "weights": settings.weights(), "field": field, "fields": settings.interests()["topics"]},
     )
 
 
 @app.get("/onboarding/tune/top", response_class=HTMLResponse)
-def onboarding_tune_top(request: Request):
+def onboarding_tune_top(request: Request, field: str = ""):
     """The top stories again, after you moved a dial."""
     rows = templates.get_template("_sample_row.html")
-    return HTMLResponse("".join(rows.render(a=a, preview=True) for a in top_stories()))
+    return HTMLResponse("".join(rows.render(a=a, preview=True) for a in top_stories(field)))
 
 
 @app.post("/onboarding/weights")

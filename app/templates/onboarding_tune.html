@@ -7,18 +7,28 @@
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>What should come first?</h1>
-    <p class="date">Step 6 of 7 · Your ratings set these dials. Turn any of them and watch the top of your feed change.</p>
+    <p class="date">Step 6 of 7 · Your ratings set these dials. Turn any of them and watch the top of your feed change; pick a field to see what they do there.</p>
   </div>
 </header>
+
+{#- One set of dials for everything; a field only narrows the stories shown, so you can check each in turn. #}
+{% if fields %}
+<nav class="view-switch" aria-label="Field">
+  <a href="/onboarding/tune" {% if not field %}aria-current="page"{% endif %}>All</a>
+  {% for topic in fields %}
+  <a href="/onboarding/tune?field={{ topic }}" {% if topic == field %}aria-current="page"{% endif %}>{{ topic }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
 
 <div class="rate-layout">
   {% if articles %}
   {% set preview = true %}
-  <ol class="sources rate-list" data-top>
+  <ol class="sources rate-list" data-top data-field="{{ field }}">
     {% for a in articles %}{% include "_sample_row.html" %}{% endfor %}
   </ol>
   {% else %}
-  <p class="empty">No stories yet to show. The dials still work; you'll see them at work on your feed.</p>
+  <p class="empty">{% if field %}No {{ field }} stories yet to show. Pick another field above.{% else %}No stories yet to show. The dials still work; you'll see them at work on your feed.{% endif %}</p>
   {% endif %}
   {#- Each turn is saved at once (POST /onboarding/weights) and the top stories come again, so Next needs no form. #}
   <div data-tune>{{ dials(weights) }}</div>
