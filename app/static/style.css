@@ -286,6 +286,9 @@ h1 {
   overflow: hidden;
   height: 2lh;
 }
+/* On the homepage the row keeps that two-line height, but a one-line title sits in the middle of it, not at the top. */
+.row-text { display: flex; flex-direction: column; justify-content: center; height: calc(2 * 1.35em + 1px + 12.5px * 1.4); }
+.row .title { height: auto; }
 .title:hover { color: var(--accent); }
 .title:visited { color: var(--muted); }
 
