@@ -91,4 +91,4 @@ uv run scripts/similar.py --item <id>         # nearest to an article; the id is
 
 okaeri is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0): use it, change it and share it. If you share a changed version, or run one for others as a service, you share its source under the same license. It comes without any warranty.
 
-Contributions are welcome. By sending a pull request, you agree that your contribution may be used under the AGPL-3.0 and under the MIT License, so the project can keep its licensing options open.
+Contributions are welcome and are licensed under the same AGPL-3.0.
