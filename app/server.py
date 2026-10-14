@@ -350,25 +350,32 @@ def onboarding_languages_submit(languages: Annotated[list[str] | None, Form()] =
     return RedirectResponse("/onboarding/interests", status_code=303)
 
 
-@app.get("/onboarding/interests", response_class=HTMLResponse)
-def onboarding_interests(request: Request):
+def interests_page(request: Request, chosen: set[str], missing: str = "", status_code: int = 200) -> HTMLResponse:
     groups = [
         ("Fields", "topics", [(t, t, source_count(t)) for t in sorted(TOPICS)]),
         ("Formats", "formats", [(f, label, source_count(f)) for f, label in FORMAT_GROUPS.items()]),
     ]
+    return templates.TemplateResponse(
+        request, "onboarding_interests.html", {"groups": groups, "chosen": chosen, "missing": missing}, status_code=status_code
+    )
+
+
+@app.get("/onboarding/interests", response_class=HTMLResponse)
+def onboarding_interests(request: Request):
     interests = settings.interests()
-    chosen = {*interests["formats"], *interests["topics"]}
-    return templates.TemplateResponse(request, "onboarding_interests.html", {"groups": groups, "chosen": chosen})
+    return interests_page(request, {*interests["formats"], *interests["topics"]})
 
 
 @app.post("/onboarding/interests")
 def onboarding_interests_submit(
-    formats: Annotated[list[str] | None, Form()] = None, topics: Annotated[list[str] | None, Form()] = None
+    request: Request, formats: Annotated[list[str] | None, Form()] = None, topics: Annotated[list[str] | None, Form()] = None
 ):
     formats = [f for f in formats or [] if f in FORMATS]
     topics = [t for t in topics or [] if t in TOPICS]
     if not formats or not topics:
-        return RedirectResponse("/onboarding/interests", status_code=303)
+        # The same step again, with your picks and what's missing. 422: Turbo only shows a failed form's page.
+        missing = " and ".join(word for word, picked in (("one field", topics), ("one format", formats)) if not picked)
+        return interests_page(request, {*formats, *topics}, f"Pick at least {missing}.", 422)
     settings.set_interests(formats, topics)
     return RedirectResponse("/onboarding/sources", status_code=303)
 

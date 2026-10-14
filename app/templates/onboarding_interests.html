@@ -36,6 +36,7 @@
     <span class="footer-actions">
       <span data-selected-count aria-live="polite">0 selected</span>
       <button type="button" class="link-btn" data-select-all hidden>Select all</button>
+      {% if missing %}<span class="form-note" role="alert">{{ missing }}</span>{% endif %}
     </span>
     <span class="footer-actions">
       <a class="quiet-btn" href="/onboarding/languages">Back</a>
