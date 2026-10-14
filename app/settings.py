@@ -103,14 +103,14 @@ def set_name(name: str) -> None:
 
 
 def about() -> list[str]:
-    """What you'd like to read about, one interest each, in your own words (onboarding step 1). They pick your
+    """What you'd like to read about, one interest each, in your own words (onboarding step 3). They pick your
     first fields and sources."""
     return load()["about"]
 
 
 def set_about(about: list[str]) -> None:
     settings = load()
-    settings["about"] = [a.strip()[:100] for a in about if a.strip()][:5]
+    settings["about"] = list(dict.fromkeys(a.strip()[:100] for a in about if a.strip()))[:8]
     save(settings)
 
 
@@ -171,6 +171,16 @@ def set_sort(tab_slug: str, sort: str) -> bool:
             save(settings)
             return True
     return False
+
+
+def start_tabs(topics: list[str]) -> None:
+    """Onboarding: a tab for each field you picked comes first, then the example's tabs that aren't one of those. An
+    example tab of just that field lends its name ("AI" rather than "Ai")."""
+    examples = [t for t in json.loads(EXAMPLE.read_text())["tabs"] if "builtin" not in t]
+    names = {tuple(t.get("topics", [])): t["name"] for t in examples if not t.get("media") and not t.get("sources")}
+    fields = [{"name": names.get((t,), t.capitalize()), "topics": [t]} for t in topics]
+    rest = [t for t in examples if not any(f["name"] == t["name"] for f in fields)]
+    set_tabs([{"builtin": "all"}, *fields, *rest, {"builtin": "history"}])
 
 
 def set_tabs(rows: list[dict]) -> None:

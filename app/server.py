@@ -11,12 +11,14 @@ from urllib.parse import urlsplit
 
 import numpy as np
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import settings
-from app.embed import about_document, model_downloaded, pending, source_document, stored_vectors, text_key, topic_document
+from app.embed import (
+    MODEL, LiveEmbedder, about_document, model_downloaded, pending, source_document, stored_vectors, text_key, topic_document,
+)
 from app.fetch import Refresher
 from app.models import Article, Event, Source
 from app.rank import learn, rank, sample, switched_on
@@ -32,7 +34,9 @@ PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 SAMPLE_SIZE = 5
 TOP_SIZE = 5  # the stories onboarding shows while you tune the ranking
 SOURCES_PER_INTEREST = 3  # onboarding ticks the sources nearest to each interest you wrote
-MAX_INTERESTS = 5  # the inputs for them in step 1
+MAX_INTERESTS = 8  # onboarding step 3: things you'd like to read about
+RING_PULL = 0.78  # step 3's map: how far toward its fields a point goes, the fields being on a ring of 1
+TEMPERATURE = 0.015  # how sharply a point goes to its nearest field rather than between several
 HISTORY_SIZE = 100
 HISTORY_VIEWS = {"opened": "Opened", "liked": "Liked", "hidden": "Hidden"}
 
@@ -50,10 +54,12 @@ async def lifespan(app: FastAPI):
         app.state.refresher = Refresher(store(), BY_ID)
         task = asyncio.create_task(app.state.refresher.run())
     yield
+    live.stop()
     if task:
         task.cancel()
 
 
+live = LiveEmbedder()  # onboarding's map, while you're on it
 app = FastAPI(title="okaeri", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
@@ -342,22 +348,110 @@ def onboarding_name(request: Request, redo: bool = False):
     # Once set up, only a redo (or Back from the next step) comes here.
     if settings.enabled_sources() and not redo:
         return RedirectResponse("/settings", status_code=303)
-    wake_refresher(request)  # the first time, the embedding model downloads while you write
-    return templates.TemplateResponse(request, "onboarding_name.html", {"name": settings.name(), "about": settings.about(), "max_interests": MAX_INTERESTS})
+    wake_refresher(request)  # the first time, the embedding model downloads while you're on the first steps
+    return templates.TemplateResponse(request, "onboarding_name.html", {"name": settings.name()})
 
 
 @app.post("/onboarding")
-def onboarding_name_submit(
-    request: Request, name: Annotated[str, Form()] = "", about: Annotated[list[str] | None, Form()] = None
-):
+def onboarding_name_submit(name: Annotated[str, Form()] = ""):
     settings.set_name(name)
-    settings.set_about(about or [])
-    wake_refresher(request)  # embeds your interests, ready for the steps that use them
     return RedirectResponse("/onboarding/languages", status_code=303)
 
 
+# Step 3: what you'd like to read about, in your own words, a few words each. Each becomes a point on a map of the
+# fields, and the sources nearest to it come out of it. Later steps tick the fields and sources nearest to them.
+
+@app.get("/onboarding/about", response_class=HTMLResponse)
+def onboarding_about(request: Request):
+    wake_refresher(request)
+    return templates.TemplateResponse(
+        request, "onboarding_about.html", {"about": settings.about(), "max_interests": MAX_INTERESTS}
+    )
+
+
+@app.post("/onboarding/about")
+def onboarding_about_submit(request: Request, about: Annotated[list[str] | None, Form()] = None):
+    settings.set_about(about or [])
+    wake_refresher(request)  # embeds any the map didn't, ready for the steps that use them
+    return RedirectResponse("/onboarding/interests", status_code=303)
+
+
+async def vectors_for(texts: list[str]) -> np.ndarray:
+    """Their vectors, embedding (and saving) the ones not stored yet."""
+    stored = await asyncio.to_thread(stored_vectors, store())
+    if missing := [t for t in dict.fromkeys(texts) if text_key(t) not in stored]:
+        new = await live.embed(missing)
+        await asyncio.to_thread(store().save_embeddings, MODEL, [(text_key(t), v.tobytes()) for t, v in zip(missing, new)])
+        stored |= {text_key(t): v for t, v in zip(missing, new)}
+    return np.vstack([stored[text_key(t)] for t in texts])
+
+
+def field_ring(topic_vectors: np.ndarray) -> np.ndarray:
+    """The fields evenly around a circle, in the order a flat projection of them (PCA) has them, so related fields sit
+    side by side. The projection itself bunches most of them in the middle."""
+    centered = topic_vectors - topic_vectors.mean(axis=0)
+    xy = centered @ np.linalg.svd(centered, full_matrices=False)[2][:2].T
+    angles = np.empty(len(xy))
+    angles[np.argsort(np.arctan2(xy[:, 1], xy[:, 0]))] = np.linspace(0, 2 * np.pi, len(xy), endpoint=False)
+    return np.column_stack([np.cos(angles), np.sin(angles)])
+
+
+def place(vectors: np.ndarray, topic_vectors: np.ndarray, ring: np.ndarray) -> np.ndarray:
+    """Inside the ring, toward the fields each is nearest to: close to one if it's clearly about it, between several
+    if it's about all of them."""
+    scores = vectors @ topic_vectors.T
+    weights = np.exp((scores - scores.max(axis=1, keepdims=True)) / TEMPERATURE)
+    return RING_PULL * (weights / weights.sum(axis=1, keepdims=True)) @ ring
+
+
+about_map: dict = {}  # made once: the catalog doesn't change while the server runs
+
+
+async def make_about_map() -> dict:
+    if not about_map:
+        topics = sorted(TOPICS)
+        vectors = await vectors_for([topic_document(t) for t in topics] + [source_document(s) for s in SOURCES])
+        topic_vectors, source_vectors = vectors[: len(topics)], vectors[len(topics) :]
+        ring = field_ring(topic_vectors)
+        about_map.update(topics=topics, topic_vectors=topic_vectors, ring=ring, source_vectors=source_vectors, json={
+            "fields": [{"name": t, "x": x, "y": y} for t, (x, y) in zip(topics, ring.tolist())],
+            "sources": [
+                {"id": s.id, "name": s.name, "description": s.description, "x": x, "y": y}
+                for s, (x, y) in zip(SOURCES, place(source_vectors, topic_vectors, ring).tolist())
+            ],
+        })
+    return about_map
+
+
+def waiting() -> JSONResponse:
+    return JSONResponse({"waiting": True}, status_code=503)  # the model is still downloading: the page asks again
+
+
+@app.get("/onboarding/about/map")
+async def onboarding_about_map():
+    if not model_downloaded():
+        return waiting()
+    return (await make_about_map())["json"]
+
+
+@app.post("/onboarding/about/place")
+async def onboarding_about_place(text: Annotated[str, Form()]):
+    """Where one of your interests goes on the map, the field it's nearest to, and the sources nearest to it."""
+    if not model_downloaded():
+        return waiting()
+    m = await make_about_map()
+    vector = (await vectors_for([about_document(text.strip()[:100])]))[0]
+    (x, y), = place(vector[None], m["topic_vectors"], m["ring"]).tolist()
+    nearest_sources = np.argsort(-(m["source_vectors"] @ vector))[:SOURCES_PER_INTEREST]
+    return {
+        "x": x, "y": y,
+        "field": m["topics"][int(np.argmax(m["topic_vectors"] @ vector))],
+        "sources": [SOURCES[i].id for i in nearest_sources],
+    }
+
+
 def about_scores(documents: dict[str, str]) -> dict[str, np.ndarray]:
-    """For each of `documents` (id -> text): how close it is to each interest you wrote in step 1, in order. Empty if
+    """For each of `documents` (id -> text): how close it is to each interest you wrote in step 3, in order. Empty if
     you wrote none, or none is embedded yet: then the steps that use them work as without."""
     vectors = stored_vectors(store())
     interests = [vectors[key] for a in settings.about() if (key := text_key(about_document(a))) in vectors]
@@ -387,7 +481,7 @@ def onboarding_languages_submit(languages: Annotated[list[str] | None, Form()] =
     if not picked:
         return RedirectResponse("/onboarding/languages", status_code=303)
     settings.set_languages(picked)
-    return RedirectResponse("/onboarding/interests", status_code=303)
+    return RedirectResponse("/onboarding/about", status_code=303)
 
 
 def interests_page(
@@ -422,6 +516,7 @@ def onboarding_interests_submit(
         missing = " and ".join(word for word, picked in (("one field", topics), ("one medium", media)) if not picked)
         return interests_page(request, {*media, *topics}, f"Pick at least {missing}.", 422)
     settings.set_interests(media, topics)
+    settings.start_tabs(topics)  # step 8 opens with them
     return RedirectResponse("/onboarding/sources", status_code=303)
 
 
@@ -477,7 +572,7 @@ def sample_pool(shuffle: bool = False, field: str = "") -> list[Article]:
     ]
     events = store().events()
     rated = switched_on(events, "seed", "unseed") | switched_on(events, "hide", "unhide")
-    # Each interest you wrote in step 1 counts as one more like here (only here: they're not saved as likes), so the
+    # Each interest you wrote in step 3 counts as one more like here (only here: they're not saved as likes), so the
     # first stories to rate are the ones nearest to one of them. rank() skips a like it has no vector for yet.
     now = datetime.now(UTC)
     events = [*events, *(Event("seed", text_key(about_document(a)), now) for a in settings.about())]

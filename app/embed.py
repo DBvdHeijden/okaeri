@@ -1,13 +1,18 @@
 """Article embeddings with EmbeddingGemma 2, run locally; rank() uses them for Recommended.
 
-    python -m app.embed    # embed everything pending, then exit
+    python -m app.embed          # embed everything pending, then exit
+    python -m app.embed serve    # embed texts as they come: a JSON list per line on stdin, their vectors on stdout
 
-The refresh loop runs this as a short-lived child process, so the server never holds the model in memory.
+The refresh loop runs the first as a short-lived child process, so the server never holds the model in memory;
+onboarding's map runs the second (LiveEmbedder) while you're on it.
 """
 
+import asyncio
 import hashlib
+import json
 import logging
 import os
+import sys
 import time
 from collections.abc import Callable
 from functools import partial
@@ -161,5 +166,50 @@ def main() -> None:
     embed_new(open_store(default_path()), embed)
 
 
+def serve() -> None:
+    logging.basicConfig(level=logging.INFO)
+    embed = load_embedder()
+    for line in sys.stdin:  # until the server closes our input
+        texts = json.loads(line)
+        vectors = np.vstack([embed(texts[start : start + BATCH]) for start in range(0, len(texts), BATCH)])
+        print(json.dumps(vectors.tolist()), flush=True)
+
+
+class LiveEmbedder:
+    """The model in a child process (`serve`) that stays up while it's in use, so a text takes ~150 ms instead of a
+    model load each time. It quits after IDLE_SECONDS without a request."""
+
+    IDLE_SECONDS = 60
+
+    def __init__(self):
+        self.child: asyncio.subprocess.Process | None = None
+        self.lock = asyncio.Lock()
+        self.idle: asyncio.TimerHandle | None = None
+
+    async def embed(self, texts: list[str]) -> np.ndarray:
+        async with self.lock:  # one request at a time: answers come back in order on one pipe
+            if self.child is None:
+                self.child = await asyncio.create_subprocess_exec(
+                    sys.executable, "-m", "app.embed", "serve", cwd=ROOT,
+                    stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                    limit=2**24,  # a line holds every vector of a request: the whole catalog is ~0.5 MB of JSON
+                )
+            self.child.stdin.write((json.dumps(texts) + "\n").encode())
+            await self.child.stdin.drain()
+            line = await self.child.stdout.readline()
+            if not line:
+                self.child = None
+                raise RuntimeError("the embedding process stopped")
+            if self.idle:
+                self.idle.cancel()
+            self.idle = asyncio.get_running_loop().call_later(self.IDLE_SECONDS, self.stop)
+            return np.array(json.loads(line), np.float32)
+
+    def stop(self) -> None:
+        if self.child and self.child.returncode is None:
+            self.child.stdin.close()  # it reads to the end of its input, then exits
+        self.child = None
+
+
 if __name__ == "__main__":
-    main()
+    serve() if sys.argv[1:] == ["serve"] else main()

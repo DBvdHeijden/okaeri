@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Interests · okaeri{% endblock %}
+{% block page_class %}wide{% endblock %}
+{% block content %}
+<header class="masthead">
+  <div>
+    <p class="kicker" lang="ja">はじめまして</p>
+    <h1>What do you like to read about?</h1>
+    <p class="date">Step 3 of 8 · A few words at a time: a topic, a question, a niche. Each lands near the fields it's about and brings the sources that cover it. Optional.</p>
+  </div>
+</header>
+
+<form method="post" action="/onboarding/about" data-about-form>
+  {#- With JS (app.js: initAboutMap) the inputs below make way for a map: your interests as points among the fields,
+      their nearest sources coming out of them. Hover a point to see what it is. #}
+  <div class="about-map" data-about-map data-max="{{ max_interests }}" hidden>
+    <svg class="about-links" aria-hidden="true"></svg>
+    <p class="about-wait" data-about-wait hidden>Getting the map ready. The first time, that takes a minute or two.</p>
+    <div class="about-tip" data-about-tip hidden></div>
+  </div>
+  <div class="about-entry" data-about-entry hidden>
+    <input type="text" class="about-input" data-about-input maxlength="100" autocomplete="off" autofocus
+           placeholder="Type a topic and press Enter, like: black holes" aria-label="Something you'd like to read about">
+    <ul class="about-chips" data-about-chips aria-label="Your interests"></ul>
+  </div>
+
+  <fieldset class="about-field" data-about-fallback>
+    <legend>A few words each</legend>
+    {%- set examples = ["protein design", "Rust compilers", "Dutch politics", "black holes", "urban cycling", "sleep science", "chess engines", "rewilding"] %}
+    {%- for n in range(max_interests) %}
+    <input type="text" name="about" value="{{ about[n] if n < about | length else '' }}" placeholder="Like: {{ examples[n] }}" maxlength="100" aria-label="Interest {{ n + 1 }}">
+    {%- endfor %}
+  </fieldset>
+
+  <div class="footer-bar">
+    <span></span>
+    <span class="footer-actions">
+      <a class="quiet-btn" href="/onboarding/languages">Back</a>
+      <button type="submit" class="primary-btn">Next</button>
+    </span>
+  </div>
+</form>
+{% endblock %}

@@ -14,7 +14,8 @@
     {#- Both labels, one shown: the button keeps the longer one's width, so the buttons beside it stay put. #}
     {% if not t.history %}<button type="button" class="link-btn sort-btn" data-sort-tab data-sort="{{ t.sort }}">{% for sort in ("latest", "recommended") %}<span data-label="{{ sort }}">Sort: {{ sort }}</span>{% endfor %}</button>{% endif %}
     <button type="button" class="link-btn" data-hide-tab>{{ "Show" if t.hidden else "Hide" }}</button>
-    {% if not t.builtin %}<button type="button" class="link-btn" data-edit-tab>Edit</button>{% endif %}
+    {% if not t.builtin %}<button type="button" class="link-btn" data-edit-tab>Edit</button>
+    <button type="button" class="link-btn" data-remove-tab>Delete</button>{% endif %}
   </div>
   {% if not t.builtin %}
   {#- Each row narrows the one above it; a row with nothing picked doesn't narrow. #}
@@ -35,7 +36,6 @@
         {% for s in source_choices %}{{ chip("source", s.id, s.name, s.id in t.sources, {"data-medium": s.medium, "data-topics": s.tags | join(" ")}) }}{% endfor %}
       </span>
     </details>
-    <button type="button" class="link-btn" data-remove-tab>Delete tab</button>
   </div>
   {% endif %}
 </li>

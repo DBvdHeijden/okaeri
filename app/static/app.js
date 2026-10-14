@@ -288,7 +288,7 @@
     else if (e.target.closest("[data-next]")) paging?.move(1);
   });
 
-  // Onboarding's stories (steps 5 and 6) turn like the feed's pages when you switch fields: they leave quickly, and
+  // Onboarding's stories (steps 6 and 7) turn like the feed's pages when you switch fields: they leave quickly, and
   // the next ones come in top to bottom.
   const leaveRows = async () => {
     if (paging) return paging.leave();
@@ -305,7 +305,7 @@
     document.querySelectorAll(".rate-list > .rate-row").forEach((row, n) => {
       row.style.setProperty("--i", n);
       row.classList.add("entering");
-      // Off again once it's in: step 6's dials put these rows back in a new order, which would replay it.
+      // Off again once it's in: step 7's dials put these rows back in a new order, which would replay it.
       row.addEventListener("animationend", () => row.classList.remove("entering"), { once: true });
     });
   }
@@ -480,19 +480,203 @@
     });
   }
 
-  // Onboarding step 1: the interests come a few inputs at a time; "Add another" shows the next.
-  function initInterests() {
-    const box = document.querySelector("[data-interests]");
-    if (!box) return;
-    const add = box.querySelector("[data-add-interest]");
-    const next = () => box.querySelector("input[hidden]");
-    add.hidden = !next();
-    add.addEventListener("click", () => {
-      const input = next();
-      input.hidden = false;
+  // Onboarding step 3: your interests as points on a map of the fields. The server places each one
+  // (/onboarding/about/place: towards the fields it's nearest to) and names the sources nearest to it; those come out
+  // of it one by one and drift to their own places, a thread back to it. Points spring towards their places, nudge
+  // each other apart and drift a little; hover one to see what it is. Without JS the step is plain inputs.
+  function initAboutMap() {
+    const map = document.querySelector("[data-about-map]");
+    if (!map) return;
+    const form = map.closest("form");
+    const entry = form.querySelector("[data-about-entry]");
+    const input = entry.querySelector("[data-about-input]");
+    const chips = entry.querySelector("[data-about-chips]");
+    const threads = map.querySelector(".about-links");
+    const tip = map.querySelector("[data-about-tip]");
+    const fallback = form.querySelector("[data-about-fallback]");
+    const max = Number(map.dataset.max);
+    const earlier = [...fallback.querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean);
+    fallback.remove();
+    map.hidden = entry.hidden = false;
+
+    let catalog = null;          // source id -> {name, description, x, y}, once the map is in
+    const labels = [];           // the fields: {name, x, y, el}
+    const interests = [];        // {text, el, chip, field, at, lines: source id -> <line>, ...motion}
+    const sources = new Map();   // id -> {info, el, from: the interests it came out of, ...motion}
+    const nodeOf = new WeakMap(); // element -> its interest or source, for the tooltip
+
+    // The server's places are on a ring of 1; here the ring is an ellipse filling the map, the fields' names on it.
+    const toPx = ({ x, y }) => {
+      const w = map.clientWidth, h = map.clientHeight;
+      return { x: w / 2 + x * (w / 2 - 70), y: h / 2 + y * (h / 2 - 28) };
+    };
+    const node = (className, from, at) => {
+      const el = document.createElement("span");
+      el.className = className;
+      map.append(el);
+      const n = { el, x: from.x, y: from.y, vx: 0, vy: 0, at, size: el.offsetWidth, phase: Math.random() * 7 };
+      nodeOf.set(el, n);
+      return n;
+    };
+
+    async function loadMap() {
+      const note = map.querySelector("[data-about-wait]");
+      note.hidden = false;  // the first time it can take a while: the model downloads, then reads the catalog
+      const res = await fetch("/onboarding/about/map");
+      if (!map.isConnected) return;
+      if (!res.ok) return setTimeout(loadMap, res.status === 503 ? 3000 : 10000);
+      note.hidden = true;
+      const { fields, sources: list } = await res.json();
+      catalog = new Map(list.map((s) => [s.id, s]));
+      for (const field of fields) {
+        const el = document.createElement("span");
+        el.className = "about-label";
+        el.textContent = field.name;
+        map.append(el);
+        labels.push({ ...field, el });
+      }
+      interests.forEach(place);  // the ones you wrote while it loaded
+    }
+
+    async function place(item) {
+      if (!catalog) return;  // loadMap places it once the map is in
+      const res = await fetch("/onboarding/about/place", { method: "POST", body: new URLSearchParams({ text: item.text }) });
+      if (!item.el.isConnected) return;  // removed meanwhile
+      if (!res.ok) return setTimeout(() => place(item), 3000);
+      const { x, y, field, sources: ids } = await res.json();
+      Object.assign(item, { at: { x, y }, field });
+      item.el.classList.remove("waiting");
+      light();
+      ids.forEach((id, n) => setTimeout(() => sprout(item, id), 500 + n * 180));  // once it has nearly arrived
+    }
+
+    function sprout(item, id) {
+      if (!item.el.isConnected) return;
+      const info = catalog.get(id);
+      if (!sources.has(id)) sources.set(id, Object.assign(node("about-source", item, info), { info, from: new Set() }));
+      sources.get(id).from.add(item);
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      threads.append(line);
+      item.lines.set(id, line);
+    }
+
+    // Each interest lights up the name of the field it's nearest to.
+    const light = () => {
+      for (const label of labels) label.el.classList.toggle("lit", interests.some((i) => i.field === label.name));
+    };
+
+    function add(text) {
+      text = text.trim().slice(0, 100);
+      if (!text || interests.length >= max || interests.some((i) => i.text.toLowerCase() === text.toLowerCase())) return;
+      // It comes up out of the input, and waits there until the server has placed it.
+      const start = { x: map.clientWidth / 2 + (Math.random() - 0.5) * 60, y: map.clientHeight };
+      const waitAt = { x: (Math.random() - 0.5) * 0.4, y: 0.7 };
+      const item = Object.assign(node("about-point waiting", start, waitAt), { text, field: null, lines: new Map() });
+      item.vy = -6;
+      const value = Object.assign(document.createElement("input"), { type: "hidden", name: "about", value: text });
+      form.append(value);
+      const chip = document.createElement("li");
+      const remove = Object.assign(document.createElement("button"), { type: "button", className: "chip-btn", textContent: `${text} ×` });
+      remove.setAttribute("aria-label", `Remove ${text}`);
+      remove.addEventListener("click", () => drop(item, chip, value));
+      remove.addEventListener("pointerenter", () => item.el.classList.add("hot"));
+      remove.addEventListener("pointerleave", () => item.el.classList.remove("hot"));
+      chip.append(remove);
+      chips.append(chip);
+      interests.push(item);
+      full();
+      place(item);
+    }
+
+    function drop(item, chip, value) {
+      interests.splice(interests.indexOf(item), 1);
+      item.el.remove();
+      chip.remove();
+      value.remove();
+      for (const [id, line] of item.lines) {
+        line.remove();
+        const source = sources.get(id);
+        source.from.delete(item);
+        if (source.from.size) continue;
+        sources.delete(id);  // no interest of yours left near it: it fades out
+        source.el.classList.add("leaving");
+        setTimeout(() => source.el.remove(), 300);
+      }
+      light();
+      full();
       input.focus();
-      add.hidden = !next();
+    }
+
+    const full = () => {
+      input.disabled = interests.length >= max;
+      input.placeholder = input.disabled ? "That's plenty to start with" : "Type a topic and press Enter, like: black holes";
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();  // not the form's Next
+      add(input.value);
+      input.value = "";
     });
+    // Next with something still typed takes it along.
+    form.addEventListener("submit", () => add(input.value));
+
+    map.addEventListener("pointerover", (e) => {
+      const n = nodeOf.get(e.target);
+      tip.hidden = !n;
+      if (!n) return;
+      const title = document.createElement("strong");
+      const text = document.createElement("span");
+      title.textContent = n.info ? n.info.name : n.text;
+      text.textContent = n.info ? n.info.description : n.field ? `Nearest field: ${n.field}` : "Finding its place…";
+      tip.replaceChildren(title, text);
+      const left = Math.min(n.x + 14, map.clientWidth - tip.offsetWidth);
+      tip.style.transform = `translate(${left}px, ${n.y + 14}px)`;
+    });
+    map.addEventListener("pointerout", (e) => { if (nodeOf.has(e.target)) tip.hidden = true; });
+
+    // Each point springs towards its place (plus a slow drift of its own), and points too close push apart.
+    function frame(now) {
+      if (!map.isConnected) return;  // another page
+      const t = now / 1000;
+      const all = [...interests, ...sources.values()];
+      for (const n of all) {
+        const goal = toPx(n.at);
+        const gx = goal.x + Math.sin(t * 0.5 + n.phase) * 5, gy = goal.y + Math.cos(t * 0.4 + n.phase) * 5;
+        n.vx = (n.vx + (gx - n.x) * 0.012) * 0.88;
+        n.vy = (n.vy + (gy - n.y) * 0.012) * 0.88;
+      }
+      for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+          const a = all[i], b = all[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+          const room = (a.size + b.size) / 2 + 10;
+          if (d >= room) continue;
+          const push = ((room - d) / d) * 0.05;
+          a.vx -= dx * push; a.vy -= dy * push; b.vx += dx * push; b.vy += dy * push;
+        }
+      }
+      for (const n of all) {
+        if (REDUCED) Object.assign(n, toPx(n.at));
+        else { n.x += n.vx; n.y += n.vy; }
+        n.el.style.transform = `translate(${n.x}px, ${n.y}px)`;
+      }
+      for (const label of labels) {
+        const { x, y } = toPx(label);
+        label.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+      }
+      for (const item of interests) {
+        for (const [id, line] of item.lines) {
+          const s = sources.get(id);
+          line.setAttribute("x1", item.x); line.setAttribute("y1", item.y);
+          line.setAttribute("x2", s.x); line.setAttribute("y2", s.y);
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+
+    earlier.forEach(add);
+    loadMap();
+    requestAnimationFrame(frame);
   }
 
   // Onboarding and settings
@@ -563,7 +747,7 @@
     initRows();
     initRefresh();
     initTabsEditor();
-    initInterests();
+    initAboutMap();
     initOnboardingForm();
   };
   init();

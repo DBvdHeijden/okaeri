@@ -1,6 +1,6 @@
 // The Lorenz attractor, drawn as the fading trail of a single particle (the particle itself isn't shown).
 // Decorative only: one canvas, a few hundred strokes per frame, paused when hidden.
-// On the homepage the particle runs on its own. With data-lorenz-paced (onboarding step 4) it only moves when
+// On the homepage the particle runs on its own. With data-lorenz-paced (onboarding step 6) it only moves when
 // you rate a story: each like or dislike in the tally ([data-tally]) carries it about one loop further.
 // Turbo swaps pages without running this script again, so it starts on each page's canvas (see the bottom) and
 // returns a function that stops it, keeping its state for next time.

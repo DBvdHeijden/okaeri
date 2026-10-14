@@ -113,8 +113,8 @@ button { font: inherit; color: inherit; }
 .page.wide > form { flex: 1; display: flex; flex-direction: column; gap: 40px; }
 .page.wide .footer-bar { margin-top: auto; }
 .page.wide .footer-bar .primary-btn { min-width: 104px; justify-content: center; }  /* Next and Done: same size, so Back stays put */
-/* Steps 5 and 6: the stories on the left; on the right a butterfly that fills in as you rate (5), or the dials
-   that pick the stories (6). Stacked when narrow. */
+/* Steps 6 and 7: the stories on the left; on the right a butterfly that fills in as you rate (6), or the dials
+   that pick the stories (7). Stacked when narrow. */
 .rate-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 48px; align-items: start; margin-bottom: 40px; }
 .learning { display: block; width: 100%; max-width: 360px; aspect-ratio: 1; margin: 0 auto; }  /* about the homepage's size */
 @media (max-width: 760px) {
@@ -278,7 +278,7 @@ h1 {
 }
 /* A story title always takes two lines: a short one keeps the space, a long one ends in "…" (the whole title is its
    tooltip). With the meta line kept to one, every story row is as tall as the next, so lists don't jump as stories
-   come and go, and step 6's dials stay put. */
+   come and go, and step 7's dials stay put. */
 .title, .rate-row .source-name {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -321,7 +321,7 @@ h1 {
 /* Hovering a story shows the start of it, as the feed gave it, in a card: to its right where there's room, else over
    the rows below (app.js sets data-beside, and data-above for stories low in the window, where the card opens upwards).
    It waits a moment, so skimming down the list doesn't flash cards, and lets the mouse through, so moving on hands
-   over to the next story's card. On the homepage and in onboarding (steps 5 and 6). */
+   over to the next story's card. On the homepage and in onboarding (steps 6 and 7). */
 :is(.row, .rate-row) { position: relative; }
 .preview { display: none; }
 @media (hover: hover) {
@@ -486,9 +486,71 @@ h1 {
   color: var(--text);
   font: inherit;
 }
-.about-field input[hidden] { display: none; }
 :is(.name-field, .about-field) input::placeholder { color: var(--muted); }
-:is(.name-field, .about-field) input:focus-visible { border-color: var(--accent); outline-offset: 0; }
+:is(.name-field, .about-field, .about-entry) input:focus-visible { border-color: var(--accent); outline-offset: 0; }
+
+/* Step 3's map (app.js: initAboutMap): the fields' names on a ring, your interests as warm points among them, their
+   sources as small dots with a thread back. Everything is placed by transform from the top left corner. */
+.about-map { position: relative; height: clamp(320px, 52vh, 520px); margin-top: 8px; }
+.about-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.about-links line { stroke: color-mix(in srgb, var(--warm) 35%, transparent); stroke-width: 1; }
+.about-label, .about-point, .about-source, .about-tip { position: absolute; top: 0; left: 0; }
+.about-label {
+  font: 13px var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: color 300ms ease;
+}
+.about-label.lit { color: var(--warm); }
+.about-point, .about-source { border-radius: 50%; cursor: default; }
+.about-point {
+  width: 14px; height: 14px; margin: -7px 0 0 -7px;
+  background: var(--warm);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--warm) 18%, transparent);
+  animation: point-in 400ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.about-point.waiting { animation: point-wait 1.2s ease-in-out infinite alternate; }
+.about-point.hot { box-shadow: 0 0 0 10px color-mix(in srgb, var(--warm) 28%, transparent); }
+.about-source {
+  width: 8px; height: 8px; margin: -4px 0 0 -4px;
+  background: color-mix(in srgb, var(--muted) 70%, var(--warm));
+  animation: point-in 300ms ease-out both;
+  transition: opacity 300ms ease;
+}
+.about-source.leaving { opacity: 0; }
+@keyframes point-in { from { scale: 0; } }
+@keyframes point-wait { to { opacity: 0.35; } }
+.about-wait { position: absolute; inset: auto 0 0; margin: 0; text-align: center; color: var(--muted); font-size: 14px; }
+.about-tip {
+  z-index: 2;
+  max-width: 280px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.08);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+  pointer-events: none;
+}
+.about-tip strong { display: block; color: var(--text); font-weight: 500; }
+.about-entry { max-width: 560px; margin: 0 auto 24px; }
+.about-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 17px;
+}
+.about-input::placeholder { color: var(--muted); }
+.about-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.about-chips .chip-btn { min-height: 36px; padding: 0 12px; font-size: 14px; }
 
 .group {
   margin: 32px 0 0;
@@ -580,7 +642,6 @@ h1 {
 }
 .tab-name::placeholder { color: var(--muted); }
 .tab-name:focus-visible { border-color: var(--accent); outline: none; }
-.tab-editor [data-remove-tab] { margin-left: -4px; color: var(--muted); font-size: 14px; }
 
 /* Tab filters: Media, then Topics, then Sources; each row narrows the one above. */
 .tab-filter { display: flex; align-items: center; gap: 12px; min-height: 36px; }
@@ -639,7 +700,7 @@ h1 {
 .dial:is(:hover, :active, :focus-visible)::-moz-range-thumb { height: 20px; }
 .dial:focus-visible { outline-offset: 4px; }
 
-/* Step 6: the dials on the left, the fields and the top stories they pick on the right. The dials' column is exactly
+/* Step 7: the dials on the left, the fields and the top stories they pick on the right. The dials' column is exactly
    as tall as the list, so their top and bottom lines are the list's; story rows are all one height (see .title), so
    it stays put as you switch fields. Stacked when narrow. */
 .tune-layout {
@@ -851,6 +912,6 @@ h1 {
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
-  :is(.row, .rate-row):is(.entering, .leaving), .fold[open] > :not(summary), .tab-sources[open] > :not(summary) { animation: none; }
+  :is(.row, .rate-row):is(.entering, .leaving), .fold[open] > :not(summary), .tab-sources[open] > :not(summary), .about-point, .about-source { animation: none; }
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }
