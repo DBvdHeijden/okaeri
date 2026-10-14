@@ -11,7 +11,7 @@
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>Nice to meet you</h1>
-    <p class="date">Step 1 of 7 · What should we call you? Feel free to skip this.</p>
+    <p class="date">Step 1 of 7 · What should we call you, and what would you like to read about? A few words per interest. Both are optional.</p>
   </div>
 </header>
 
@@ -20,6 +20,16 @@
     <span class="visually-hidden">Your name</span>
     <input type="text" name="name" value="{{ name }}" placeholder="Your first name" maxlength="40" autocomplete="given-name" autofocus>
   </label>
+  {#- One interest each, embedded in the background: each ticks the fields and sources nearest to it. Three to begin
+      with (one more than you filled in), the rest a click away. #}
+  {%- set examples = ["protein design", "Rust compilers", "Dutch politics", "black holes", "urban cycling"] %}
+  <fieldset class="about-field" data-interests>
+    <legend>What would you like to read about?</legend>
+    {%- for n in range(max_interests) %}
+    <input type="text" name="about" value="{{ about[n] if n < about | length else '' }}" placeholder="Like: {{ examples[n] }}" maxlength="100" aria-label="Interest {{ n + 1 }}"{% if n >= [3, about | length + 1] | max %} hidden{% endif %}>
+    {%- endfor %}
+    <button type="button" class="link-btn" data-add-interest hidden>Add another</button>
+  </fieldset>
 
   <div class="footer-bar">
     <span></span>

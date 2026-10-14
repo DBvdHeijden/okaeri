@@ -102,6 +102,18 @@ def set_name(name: str) -> None:
     save(settings)
 
 
+def about() -> list[str]:
+    """What you'd like to read about, one interest each, in your own words (onboarding step 1). They pick your
+    first fields and sources."""
+    return load()["about"]
+
+
+def set_about(about: list[str]) -> None:
+    settings = load()
+    settings["about"] = [a.strip()[:100] for a in about if a.strip()][:5]
+    save(settings)
+
+
 def languages() -> list[str]:
     return load()["languages"]
 

@@ -9,13 +9,14 @@ from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
+import numpy as np
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import settings
-from app.embed import model_downloaded, pending, stored_vectors
+from app.embed import about_document, model_downloaded, pending, source_document, stored_vectors, text_key, topic_document
 from app.fetch import Refresher
 from app.models import Article, Event, Source
 from app.rank import learn, rank, sample, switched_on
@@ -30,6 +31,8 @@ HERE = Path(__file__).parent
 PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 SAMPLE_SIZE = 5
 TOP_SIZE = 5  # the stories onboarding shows while you tune the ranking
+SOURCES_PER_INTEREST = 3  # onboarding ticks the sources nearest to each interest you wrote
+MAX_INTERESTS = 5  # the inputs for them in step 1
 HISTORY_SIZE = 100
 HISTORY_VIEWS = {"opened": "Opened", "liked": "Liked", "hidden": "Hidden"}
 
@@ -339,13 +342,35 @@ def onboarding_name(request: Request, redo: bool = False):
     # Once set up, only a redo (or Back from the next step) comes here.
     if settings.enabled_sources() and not redo:
         return RedirectResponse("/settings", status_code=303)
-    return templates.TemplateResponse(request, "onboarding_name.html", {"name": settings.name()})
+    wake_refresher(request)  # the first time, the embedding model downloads while you write
+    return templates.TemplateResponse(request, "onboarding_name.html", {"name": settings.name(), "about": settings.about(), "max_interests": MAX_INTERESTS})
 
 
 @app.post("/onboarding")
-def onboarding_name_submit(name: Annotated[str, Form()] = ""):
+def onboarding_name_submit(
+    request: Request, name: Annotated[str, Form()] = "", about: Annotated[list[str] | None, Form()] = None
+):
     settings.set_name(name)
+    settings.set_about(about or [])
+    wake_refresher(request)  # embeds your interests, ready for the steps that use them
     return RedirectResponse("/onboarding/languages", status_code=303)
+
+
+def about_scores(documents: dict[str, str]) -> dict[str, np.ndarray]:
+    """For each of `documents` (id -> text): how close it is to each interest you wrote in step 1, in order. Empty if
+    you wrote none, or none is embedded yet: then the steps that use them work as without."""
+    vectors = stored_vectors(store())
+    interests = [vectors[key] for a in settings.about() if (key := text_key(about_document(a))) in vectors]
+    if not interests:
+        return {}
+    return {i: np.array([v @ vectors[text_key(d)] for v in interests]) for i, d in documents.items() if text_key(d) in vectors}
+
+
+def nearest_each(scores: dict[str, np.ndarray], k: int) -> list[str]:
+    """The k ids nearest to each interest in turn, without repeats."""
+    interests = len(next(iter(scores.values()), []))
+    by_interest = (sorted(scores, key=lambda i: scores[i][n], reverse=True)[:k] for n in range(interests))
+    return list(dict.fromkeys(i for ids in by_interest for i in ids))
 
 
 @app.get("/onboarding/languages", response_class=HTMLResponse)
@@ -365,20 +390,25 @@ def onboarding_languages_submit(languages: Annotated[list[str] | None, Form()] =
     return RedirectResponse("/onboarding/interests", status_code=303)
 
 
-def interests_page(request: Request, chosen: set[str], missing: str = "", status_code: int = 200) -> HTMLResponse:
+def interests_page(
+    request: Request, chosen: set[str], missing: str = "", status_code: int = 200, suggested: bool = False
+) -> HTMLResponse:
     groups = [
         ("Fields", "topics", [(t, t, TAG_DESCRIPTIONS[t], source_count(lambda s: t in s.tags)) for t in sorted(TOPICS)]),
         ("Media", "media", [(m, medium["label"], medium["description"], source_count(lambda s: s.medium == m)) for m, medium in MEDIA.items()]),
     ]
     return templates.TemplateResponse(
-        request, "onboarding_interests.html", {"groups": groups, "chosen": chosen, "missing": missing}, status_code=status_code
+        request, "onboarding_interests.html", {"groups": groups, "chosen": chosen, "missing": missing, "suggested": suggested},
+        status_code=status_code,
     )
 
 
 @app.get("/onboarding/interests", response_class=HTMLResponse)
 def onboarding_interests(request: Request):
     interests = settings.interests()
-    return interests_page(request, {*interests["media"], *interests["topics"]})
+    # The first time through, each interest you wrote ticks the field nearest to it.
+    suggested = [] if interests["topics"] else nearest_each(about_scores({t: topic_document(t) for t in TOPICS}), 1)
+    return interests_page(request, {*interests["media"], *interests["topics"], *suggested}, suggested=bool(suggested))
 
 
 @app.post("/onboarding/interests")
@@ -399,16 +429,29 @@ def onboarding_interests_submit(
 def onboarding_sources(request: Request):
     interests = settings.interests()
     # Only sources in a medium you picked and in one of your fields (or in none, like Hacker News): onboarding stays
-    # short, and Settings has them all. First time through, they all start checked.
+    # short, and Settings has them all.
     offered = [s for s in spoken_sources() if source_matches(s, interests["media"], interests["topics"])]
-    selected = settings.enabled_sources() or [s.id for s in offered]
     # A fold per field you picked, as in the step before; each source once, under the first of yours it covers.
     groups: dict[str, list[Source]] = {t: [] for t in interests["topics"]} | {"general": []}
     for s in offered:
         groups[next((t for t in interests["topics"] if t in s.tags), "general")].append(s)
-    groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items() if sources}
+    groups = {label: sources for label, sources in groups.items() if sources}
+    # The first time through, each interest you wrote ticks the sources nearest to it, and each fold its best one;
+    # in each fold, the nearest (to any of your interests) first. Without interests, all start ticked.
+    selected, suggested = settings.enabled_sources(), False
+    if not selected and (scores := about_scores({s.id: source_document(s) for s in offered})):
+        # A source added to the catalog since may have no vector yet: it goes last, unticked.
+        groups = {
+            label: sorted(sources, key=lambda s: scores[s.id].max() if s.id in scores else -1, reverse=True)
+            for label, sources in groups.items()
+        }
+        best_per_fold = [sources[0].id for sources in groups.values() if sources[0].id in scores]
+        selected = list(dict.fromkeys(nearest_each(scores, SOURCES_PER_INTEREST) + best_per_fold))
+        suggested = True
+    selected = selected or [s.id for s in offered]
+    groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items()}
     return templates.TemplateResponse(
-        request, "onboarding_sources.html", {"groups": list(groups.items()), "selected": selected}
+        request, "onboarding_sources.html", {"groups": list(groups.items()), "selected": selected, "suggested": suggested}
     )
 
 
@@ -434,6 +477,10 @@ def sample_pool(shuffle: bool = False, field: str = "") -> list[Article]:
     ]
     events = store().events()
     rated = switched_on(events, "seed", "unseed") | switched_on(events, "hide", "unhide")
+    # Each interest you wrote in step 1 counts as one more like here (only here: they're not saved as likes), so the
+    # first stories to rate are the ones nearest to one of them. rank() skips a like it has no vector for yet.
+    now = datetime.now(UTC)
+    events = [*events, *(Event("seed", text_key(about_document(a)), now) for a in settings.about())]
     ranked = rank(pool, events, settings.load()) if shuffle else recommended(pool, events)
     unrated = [a for a in ranked if a.key not in rated]
     if shuffle:

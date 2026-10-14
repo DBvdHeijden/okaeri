@@ -218,7 +218,8 @@ class Store:
         cutoff = _iso(datetime.now(UTC) - timedelta(days=max_age_days))
         with self._conn() as db:
             db.execute("DELETE FROM items WHERE published_at < ? AND key NOT IN (SELECT key FROM events)", (cutoff,))
-            db.execute("DELETE FROM embeddings WHERE key NOT IN (SELECT key FROM items)")
+            # okaeri: keys are texts, not stories (app.embed: text_key).
+            db.execute("DELETE FROM embeddings WHERE key NOT IN (SELECT key FROM items) AND key NOT LIKE 'okaeri:%'")
 
     # Embeddings
 

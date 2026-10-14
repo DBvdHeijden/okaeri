@@ -5,6 +5,7 @@
 The refresh loop runs this as a short-lived child process, so the server never holds the model in memory.
 """
 
+import hashlib
 import logging
 import os
 import time
@@ -14,8 +15,8 @@ from functools import partial
 import numpy as np
 
 from app import ROOT, settings
-from app.models import Article
-from app.sources import BY_ID
+from app.models import Article, Source
+from app.sources import BY_ID, SOURCES, TAG_DESCRIPTIONS
 from app.store import Store, article_id, default_path, open_store
 
 log = logging.getLogger("okaeri.embed")
@@ -108,8 +109,39 @@ def pending(store: Store) -> list[Article]:
     return list(todo.values())
 
 
+# Texts that aren't stories: the interests you wrote in onboarding, and the catalog it's matched against (sources, topics).
+# Stored with the story vectors, keyed by the text itself, so a changed text gets a vector of its own.
+def text_key(text: str) -> str:
+    return "okaeri:" + hashlib.sha1(text.encode()).hexdigest()[:16]
+
+
+def about_document(about: str) -> str:
+    return f"task: search result | query: {about}"  # EmbeddingGemma's prompt for a query, matched against documents
+
+
+def source_document(source: Source) -> str:
+    # One-line descriptions are thin; its topics' descriptions say more about what it covers.
+    topics = " ".join(TAG_DESCRIPTIONS[t] for t in source.tags)
+    return f"title: {source.name} | text: {source.description} {topics}".strip()
+
+
+def topic_document(topic: str) -> str:
+    return f"title: {topic} | text: {TAG_DESCRIPTIONS[topic]}"
+
+
+def pending_texts(store: Store) -> list[str]:
+    texts = [about_document(a) for a in settings.about()]
+    texts += [source_document(s) for s in SOURCES] + [topic_document(t) for t in TAG_DESCRIPTIONS]
+    done = store.embedded_keys(MODEL)
+    return [t for t in texts if text_key(t) not in done]
+
+
 def embed_new(store: Store, embed: Embedder) -> None:
     started = time.monotonic()
+    texts = pending_texts(store)  # first: they're few, and onboarding is waiting for them
+    for start in range(0, len(texts), BATCH):
+        batch = texts[start : start + BATCH]
+        store.save_embeddings(MODEL, [(text_key(t), v.tobytes()) for t, v in zip(batch, embed(batch))])
     articles = sorted(pending(store), key=lambda a: len(document(a)))  # similar lengths per batch: less padding
     for start in range(0, len(articles), BATCH):
         batch = articles[start : start + BATCH]

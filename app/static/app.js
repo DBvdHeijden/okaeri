@@ -480,6 +480,21 @@
     });
   }
 
+  // Onboarding step 1: the interests come a few inputs at a time; "Add another" shows the next.
+  function initInterests() {
+    const box = document.querySelector("[data-interests]");
+    if (!box) return;
+    const add = box.querySelector("[data-add-interest]");
+    const next = () => box.querySelector("input[hidden]");
+    add.hidden = !next();
+    add.addEventListener("click", () => {
+      const input = next();
+      input.hidden = false;
+      input.focus();
+      add.hidden = !next();
+    });
+  }
+
   // Onboarding and settings
   function initOnboardingForm() {
     const form = document.querySelector("[data-onboarding]");
@@ -548,6 +563,7 @@
     initRows();
     initRefresh();
     initTabsEditor();
+    initInterests();
     initOnboardingForm();
   };
   init();

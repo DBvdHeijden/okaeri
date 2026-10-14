@@ -20,7 +20,7 @@ import feedparser
 import httpx
 
 from app import ROOT, settings
-from app.embed import pending
+from app.embed import pending, pending_texts
 from app.models import FetchedItem, Source
 from app.sources import MEDIA
 from app.store import Store
@@ -304,7 +304,7 @@ class Refresher:
         """Embed pending items in a child process; it logs to our stderr and takes the model's memory with it."""
         if time.monotonic() - self.embed_failed_at < EMBED_RETRY_SECONDS:
             return
-        if not await asyncio.to_thread(pending, self.store):
+        if not await asyncio.to_thread(lambda: pending(self.store) or pending_texts(self.store)):
             return
         child = await asyncio.create_subprocess_exec(sys.executable, "-m", "app.embed", cwd=ROOT)
         self.embedding = True

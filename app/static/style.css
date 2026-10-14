@@ -471,8 +471,21 @@ h1 {
   font: inherit;
   font-size: 20px;
 }
-.name-field input::placeholder { color: var(--muted); }
-.name-field input:focus-visible { border-color: var(--accent); outline-offset: 0; }
+.about-field { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 420px; margin: 32px 0 0; padding: 0; border: 0; }
+.about-field legend { padding: 0; margin-bottom: 12px; font-weight: 500; }
+.about-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.about-field input[hidden] { display: none; }
+:is(.name-field, .about-field) input::placeholder { color: var(--muted); }
+:is(.name-field, .about-field) input:focus-visible { border-color: var(--accent); outline-offset: 0; }
 
 .group {
   margin: 32px 0 0;
