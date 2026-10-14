@@ -1,7 +1,7 @@
 {% from "_stats.html" import stat, points_icon, comments_icon %}
 {#- One story to rate on onboarding step 5; also sent alone, to replace a story you just rated.
     With preview, just the story: the top stories while you tune the ranking, step 6. #}
-<li class="rate-row" data-id="{{ a.id }}" data-source="{{ a.source_id }}">
+<li class="rate-row" data-id="{{ a.id }}" data-source="{{ a.source_id }}" data-topics="{{ tags_for(a) | sort | join(' ') }}">
   <span class="source-text">
     <a class="source-name" href="/r/{{ a.id }}" target="_blank" rel="noopener">{{ a.title }}</a>
     {%- set when = a.published_at | ago %}

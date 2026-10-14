@@ -160,11 +160,17 @@
     const kind = rating === "up" ? "liked" : "disliked";
     tally.dataset[kind] = Number(tally.dataset[kind]) + 1;
     tally.textContent = `${tally.dataset.liked} liked · ${tally.dataset.disliked} not for me`;
+    // And the count of each field it's in.
+    for (const topic of row.dataset.topics.split(" ").filter(Boolean)) {
+      const count = document.querySelector(`[data-field-count="${topic}"]`);
+      if (count) count.textContent = Number(count.textContent) + 1;
+    }
 
     const rows = [...row.parentElement.children];
     const query = new URLSearchParams({
       shown: rows.map((r) => r.dataset.id).join(","),
       sources: rows.filter((r) => r !== row).map((r) => r.dataset.source).join(","),
+      field: row.parentElement.dataset.field,  // the next story stays in the field you're rating
     });
     await saved;
     const res = await fetch(`/onboarding/sample/next?${query}`).catch(() => null);

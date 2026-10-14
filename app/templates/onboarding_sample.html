@@ -12,9 +12,19 @@
   </div>
 </header>
 
+{#- Rate one field at a time, with how many you've rated in each; app.js counts up as you rate. #}
+{% if fields %}
+<nav class="view-switch" aria-label="Field">
+  <a href="/onboarding/sample" {% if not field %}aria-current="page"{% endif %}>All</a>
+  {% for topic, n in fields %}
+  <a href="/onboarding/sample?field={{ topic }}" {% if topic == field %}aria-current="page"{% endif %}>{{ topic }} <span class="field-count" data-field-count="{{ topic }}">{{ n }}</span></a>
+  {% endfor %}
+</nav>
+{% endif %}
+
 {% if articles %}
 <div class="rate-layout">
-  <ul class="sources rate-list">
+  <ul class="sources rate-list" data-field="{{ field }}">
     {% for a in articles %}{% include "_sample_row.html" %}{% endfor %}
   </ul>
   <div class="learning-side">
@@ -23,7 +33,7 @@
 </div>
 <div class="footer-bar">
   <span class="footer-actions">
-    <a class="quiet-btn flush" href="/onboarding/sample?shuffle=1">Show others</a>
+    <a class="quiet-btn flush" href="/onboarding/sample?shuffle=1{% if field %}&amp;field={{ field }}{% endif %}">Show others</a>
     <span class="tally" data-tally data-liked="{{ liked }}" data-disliked="{{ disliked }}" aria-live="polite">{{ liked }} liked · {{ disliked }} not for me</span>
   </span>
   <span class="footer-actions">
@@ -32,7 +42,7 @@
   </span>
 </div>
 {% else %}
-<p class="empty"{% if pending %} data-refresh{% endif %}>{% if pending %}Fetching the first stories from your sources, one moment…{% else %}No stories yet. You can always come back to this later.{% endif %}</p>
+<p class="empty"{% if pending %} data-refresh{% endif %}>{% if pending %}Fetching the first stories from your sources, one moment…{% elif field %}Nothing left to rate in {{ field }}. Pick another field above.{% else %}No stories yet. You can always come back to this later.{% endif %}</p>
 <div class="footer-bar">
   <span></span>
   <span class="footer-actions">

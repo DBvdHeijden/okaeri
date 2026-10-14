@@ -4,6 +4,10 @@ Latest is plain recency. Recommended adds up five signals, each scaled 0..1, wit
 how close a story is to what you opened or liked, how fresh it is, how many points and comments it has,
 a little chance, minus how close it is to what you hid. Onboarding learns the first four weights from
 your ratings (learn()); after that the weights are yours to tune. Chance is never learned.
+
+Closeness is a taste per topic: a story is compared with what you liked (or hid) in its own topics, and placed
+among the other stories in them. Liking AI lifts AI stories without sinking politics, and a topic you haven't
+rated yet stays neutral.
 """
 
 import hashlib
@@ -14,7 +18,7 @@ from datetime import UTC, date, datetime
 import numpy as np
 
 from app.models import Article, Event
-from app.sources import MEDIA, medium_of
+from app.sources import MEDIA, medium_of, tags_for
 
 
 @dataclass(frozen=True)
@@ -48,19 +52,25 @@ def rank(
     settings: dict,
     vectors: dict[str, np.ndarray] | None = None,
     sort: str = "latest",
+    topics: dict[str, frozenset[str]] | None = None,
 ) -> list[Article]:
+    """`topics`: of the stories you opened, liked or hid that may have left `articles` (store.stories() has them)."""
     if sort == "recommended":
-        return [b.article for b in explain(articles, events, settings, vectors or {})]
+        return [b.article for b in explain(articles, events, settings, vectors or {}, topics or {})]
     hidden = switched_on(events, "hide", "unhide")
     return sorted((a for a in articles if a.key not in hidden), key=lambda a: a.published_at, reverse=True)
 
 
-def explain(articles: Sequence[Article], events: Sequence[Event], settings: dict, vectors: dict[str, np.ndarray]) -> list[Breakdown]:
+def explain(
+    articles: Sequence[Article], events: Sequence[Event], settings: dict, vectors: dict[str, np.ndarray],
+    topics: dict[str, frozenset[str]],
+) -> list[Breakdown]:
     """Recommended, best first, with every score taken apart."""
     newest = rank(articles, events, settings)
     liked = {e.key for e in events if e.type == "click"} | switched_on(events, "seed", "unseed").keys()
     hidden = switched_on(events, "hide", "unhide")
-    sig, nearest = signals(newest, [k for k in liked if k in vectors], [k for k in hidden if k in vectors], vectors)
+    topics = topics | {a.key: tags_for(a) for a in articles}
+    sig, nearest = signals(newest, [k for k in liked if k in vectors], [k for k in hidden if k in vectors], vectors, topics)
     w = settings["ranking"]
     score = sum(w[name] * values for name, values in sig.items() if name != "hidden") - w["hidden"] * sig["hidden"]
     rows = [Breakdown(*row) for row in zip(newest, *sig.values(), nearest, score)]
@@ -68,11 +78,13 @@ def explain(articles: Sequence[Article], events: Sequence[Event], settings: dict
 
 
 def signals(
-    articles: list[Article], liked: list[str], hidden: list[str], vectors: dict[str, np.ndarray]
+    articles: list[Article], liked: list[str], hidden: list[str], vectors: dict[str, np.ndarray],
+    topics: dict[str, frozenset[str]],
 ) -> tuple[dict[str, np.ndarray], list[str | None]]:
-    """Every signal for every story, 0..1, in Breakdown's order; and the liked story each is nearest to."""
-    like, nearest = closeness(articles, liked, vectors)
-    dislike, _ = closeness(articles, hidden, vectors)
+    """Every signal for every story, 0..1, in Breakdown's order; and the liked story each is nearest to.
+    `topics` has the topics of the liked and hidden stories."""
+    like, nearest = closeness(articles, liked, vectors, topics)
+    dislike, _ = closeness(articles, hidden, vectors, topics)
     sig = {"like": like, "hidden": dislike, "fresh": freshness(articles), "popular": popularity(articles), "random": chance(articles)}
     return sig, nearest
 
@@ -88,7 +100,7 @@ def learn(liked: list[Article], disliked: list[Article], vectors: dict[str, np.n
     if not liked or not disliked:
         return {name: 0.5 for name in ("like", "hidden", "fresh", "popular")}
     rated = liked + disliked
-    sig, _ = signals(rated, [], [], vectors)
+    sig, _ = signals(rated, [], [], vectors, {})
     # A story isn't its own match, so a lone like (or dislike) has nothing to be like: wait for a second one.
     if len(liked) >= 2:
         sig["like"] = typical_closeness(rated, [a.key for a in liked if a.key in vectors], vectors)
@@ -123,9 +135,14 @@ def percentile(values: np.ndarray) -> np.ndarray:
     return places / 2 / (len(values) - 1)
 
 
-def closeness(articles: list[Article], keys: list[str], vectors: dict[str, np.ndarray]) -> tuple[np.ndarray, list[str | None]]:
-    """How close each story is to the nearest of `keys`, as a percentile, and which one that is.
-    Raw cosine similarities sit in a narrow band; percentiles make them weigh like the other signals."""
+def closeness(
+    articles: list[Article], keys: list[str], vectors: dict[str, np.ndarray], topics: dict[str, frozenset[str]]
+) -> tuple[np.ndarray, list[str | None]]:
+    """How close each story is to the nearest of `keys` in its own topics, as a percentile among the stories in
+    those topics, and which key that is. Per topic, so one you rated a lot doesn't crowd out the rest; one with no
+    keys yet is a neutral 0.5. A story in two topics gets the mean. Keys and stories without topics (Hacker News,
+    Lobsters) count everywhere. Raw cosine similarities sit in a narrow band; percentiles make them weigh like the
+    other signals."""
     out, nearest = np.zeros(len(articles)), [None] * len(articles)
     embedded = [i for i, a in enumerate(articles) if a.key in vectors]
     if not keys or not embedded:
@@ -135,8 +152,25 @@ def closeness(articles: list[Article], keys: list[str], vectors: dict[str, np.nd
     for row, i in enumerate(embedded):
         if articles[i].key in own:
             sims[row, own[articles[i].key]] = -1  # a story you opened isn't its own best match
-        nearest[i] = keys[sims[row].argmax()]
-    out[embedded] = percentile(sims.max(axis=1))
+    story_topics = [tags_for(articles[i]) for i in embedded]
+    key_topics = [topics.get(k, frozenset()) for k in keys]
+    total, parts = np.zeros(len(embedded)), np.zeros(len(embedded))
+    best = np.full(len(embedded), -np.inf)
+    for topic in {t for ts in story_topics for t in ts} | {None}:  # None: the stories without topics
+        rows = [r for r, ts in enumerate(story_topics) if (topic in ts if topic else not ts)]
+        cols = [j for j, ts in enumerate(key_topics) if not topic or not ts or topic in ts]
+        if not rows:
+            continue
+        parts[rows] += 1
+        if not cols:
+            total[rows] += 0.5
+            continue
+        within = sims[np.ix_(rows, cols)]
+        total[rows] += percentile(within.max(axis=1))
+        for r, j, sim in zip(rows, within.argmax(axis=1), within.max(axis=1)):
+            if sim > best[r]:
+                best[r], nearest[embedded[r]] = sim, keys[cols[j]]
+    out[embedded] = total / parts
     return out, nearest
 
 

@@ -17,10 +17,10 @@ from fastapi.templating import Jinja2Templates
 from app import settings
 from app.embed import model_downloaded, pending, stored_vectors
 from app.fetch import Refresher
-from app.models import Article, Source
+from app.models import Article, Event, Source
 from app.rank import learn, rank, sample, switched_on
 from app.sources import (
-    BY_ID, LANGUAGES, MEDIA, SOURCES, TAG_DESCRIPTIONS, TOPICS, in_tab, medium_of, source_matches, speaks,
+    BY_ID, LANGUAGES, MEDIA, SOURCES, TAG_DESCRIPTIONS, TOPICS, in_tab, medium_of, source_matches, speaks, tags_for,
 )
 from app.store import Store, default_path, open_store
 
@@ -107,6 +107,7 @@ def count(n: int, word: str) -> str:
 templates.env.filters["ago"] = ago
 templates.env.filters["count"] = count
 templates.env.globals["medium_of"] = medium_of
+templates.env.globals["tags_for"] = tags_for
 templates.env.globals["media"] = MEDIA
 templates.env.globals["tag_descriptions"] = TAG_DESCRIPTIONS
 templates.env.filters["language_name"] = LANGUAGES.get
@@ -124,11 +125,21 @@ def history(view: str) -> list[Article]:
     return store().stories(dict(newest), BY_ID)  # the whole catalog: links stay for sources you no longer follow
 
 
+def event_topics(events: list[Event]) -> dict[str, frozenset[str]]:
+    """The topics of the stories you opened, liked or hid, for Recommended's taste per topic. From every story
+    still stored: many have left the feed."""
+    return {a.key: tags_for(a) for a in store().stories({e.key: e.at for e in events}, BY_ID)}
+
+
+def recommended(pool: list[Article], events: list[Event]) -> list[Article]:
+    return rank(pool, events, settings.load(), stored_vectors(store()), "recommended", event_topics(events))
+
+
 def feed(selected: dict[str, Source], tab: dict) -> list[Article]:
     """A tab's stories, in its sort: on the homepage, and while you tune the ranking in onboarding."""
     pool = [a for a in store().articles(selected) if in_tab(a, tab)]
-    vectors = stored_vectors(store()) if tab["sort"] == "recommended" else None
-    return rank(pool, store().events(), settings.load(), vectors, tab["sort"])
+    events = store().events()
+    return recommended(pool, events) if tab["sort"] == "recommended" else rank(pool, events, settings.load())
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -410,34 +421,41 @@ def onboarding_sources_submit(request: Request, sources: Annotated[list[str] | N
     return RedirectResponse("/onboarding/sample", status_code=303)
 
 
-def sample_pool(shuffle: bool = False) -> list[Article]:
-    """Stories from your sources that fit your interests and that you haven't rated yet: best first by the
-    weights learned so far (which Surprise keeps from narrowing too fast), or shuffled, to explore."""
+def sample_pool(shuffle: bool = False, field: str = "") -> list[Article]:
+    """Stories from your sources that fit your interests (and the field, if one is picked) and that you haven't
+    rated yet: best first by the weights learned so far (which Surprise keeps from narrowing too fast), or
+    shuffled, to explore."""
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     interests = settings.interests()
     pool = [
         a for a in store().articles(selected)
         if any(source_matches(BY_ID[s], interests["media"], interests["topics"]) for s in a.source_ids)
+        and (not field or field in tags_for(a))
     ]
     events = store().events()
     rated = switched_on(events, "seed", "unseed") | switched_on(events, "hide", "unhide")
-    sort = "latest" if shuffle else "recommended"
-    unrated = [a for a in rank(pool, events, settings.load(), stored_vectors(store()), sort) if a.key not in rated]
+    ranked = rank(pool, events, settings.load()) if shuffle else recommended(pool, events)
+    unrated = [a for a in ranked if a.key not in rated]
     if shuffle:
         random.shuffle(unrated)
     return unrated
 
 
 @app.get("/onboarding/sample", response_class=HTMLResponse)
-def onboarding_sample(request: Request, shuffle: bool = False):
-    """Stories to rate, picked by what your ratings taught so far; "Show others" shuffles instead."""
+def onboarding_sample(request: Request, shuffle: bool = False, field: str = ""):
+    """Stories to rate, picked by what your ratings taught so far; "Show others" shuffles instead. Picking one of
+    your fields rates just that one, so each gets rated, not only the one with the most stories."""
     selected = [i for i in settings.enabled_sources() if i in BY_ID]
     events = store().events()
+    rated = switched_on(events, "seed", "unseed") | switched_on(events, "hide", "unhide")
+    rated_topics = [tags_for(a) for a in store().stories(rated, BY_ID)]
     return templates.TemplateResponse(
         request,
         "onboarding_sample.html",
         {
-            "articles": sample(sample_pool(shuffle), SAMPLE_SIZE),
+            "articles": sample(sample_pool(shuffle, field), SAMPLE_SIZE),
+            "field": field,
+            "fields": [(t, sum(t in topics for topics in rated_topics)) for t in settings.interests()["topics"]],
             "pending": store().pending(selected),
             "liked": len(switched_on(events, "seed", "unseed")),
             "disliked": len(switched_on(events, "hide", "unhide")),
@@ -446,10 +464,10 @@ def onboarding_sample(request: Request, shuffle: bool = False):
 
 
 @app.get("/onboarding/sample/next", response_class=HTMLResponse)
-def onboarding_sample_next(request: Request, shown: str = "", sources: str = ""):
-    """One new story to replace one you just rated: the best match so far, not on screen yet, and from a source
-    not on screen if possible."""
-    pool = [a for a in sample_pool() if a.id not in shown.split(",")]
+def onboarding_sample_next(request: Request, shown: str = "", sources: str = "", field: str = ""):
+    """One new story to replace one you just rated: the best match so far in the same field, not on screen yet,
+    and from a source not on screen if possible."""
+    pool = [a for a in sample_pool(field=field) if a.id not in shown.split(",")]
     if not pool:
         return Response(status_code=204)
     fresh = [a for a in pool if a.source_id not in sources.split(",")] or pool

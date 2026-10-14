@@ -241,6 +241,7 @@ h1 {
 .view-switch :is(a, button):hover { color: var(--text); background: var(--chip); }
 .view-switch [aria-current] { color: var(--text); }
 .view-switch [aria-current]:hover { background: none; }
+.field-count { color: var(--muted); }
 .history-undo { align-self: center; }
 
 /* Feed */
