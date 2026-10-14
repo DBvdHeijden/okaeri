@@ -80,21 +80,3 @@ Embedding runs in a short-lived child process, `python -m app.embed`, so the ser
 uv run scripts/similar.py "protein folding"   # feed items nearest to a search query
 uv run scripts/similar.py --item <id>         # nearest to an article; the id is the one in /r/<id>
 ```
-
-The favicons are drawn from the same Lorenz attractor as the homepage; regenerate them with `uv run scripts/make_favicon.py`.
-
-Layout:
-
-- `main.py`: runs the server (uvicorn on 127.0.0.1, one worker) and the service commands.
-- `catalog/sources.json`: the curated source catalog.
-- `catalog/tags.json`: the media (paper, blog, news, forum: each source is one, see `app/sources.py`), with their labels and how long their stories stay; and the topic tags.
-- `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it. Tabs live here, edited in onboarding step 4 and in Settings: `{"builtin": "all"|"history", "hidden"}` or custom `{"name", "media", "topics", "sources", "hidden"}`. Each narrows the one before: the media, then the topics within those, then just the listed source ids. Leave one out and it doesn't narrow; nothing at all shows everything. All is always first and History last.
-- `data/`: the SQLite database, downloaded models and the log (gitignored).
-- `app/server.py`: routes. Every article list passes through `rank()`.
-- `app/rank.py`: the ranking seam: Latest (recency) or Recommended (nearest opened/liked story in the same topics, minus the nearest hidden one, plus freshness, popularity and chance).
-- `app/sources.py`: loads the catalog; `tags_for()`, `medium_of()` and tab matching.
-- `app/fetch.py`: feed parsing (RSS/Atom, HF papers), conditional GET, and the background refresher.
-- `app/embed.py`: loads the embedding model and embeds new items.
-- `app/settings.py`: reads and writes `settings.json`.
-- `app/store.py`: SQLite: items, per-feed cache headers, user events (click, hide, …) and embeddings.
-- `app/templates/`, `app/static/`: server-rendered HTML, CSS, and a little vanilla JS.
