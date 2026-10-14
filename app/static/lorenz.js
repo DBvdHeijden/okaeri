@@ -112,12 +112,14 @@ function startLorenz(canvas) {
     }), tally, { attributes: true, attributeFilter: ["data-liked", "data-disliked"] });
   }
 
-  let trailColor = "";
+  // Warm from top to bottom of the figure (z runs 0..50); rebuilt when the theme or size changes.
+  let trailColor = null;
   function readColors() {
     const css = getComputedStyle(document.documentElement);
-    trailColor = css.getPropertyValue("--muted").trim();
+    trailColor = ctx.createLinearGradient(0, cy - 50 * scale, 0, cy);
+    trailColor.addColorStop(0, css.getPropertyValue("--warm").trim());
+    trailColor.addColorStop(1, css.getPropertyValue("--warm-end").trim());
   }
-  readColors();
   watch(new MutationObserver(readColors), document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   const scheme = matchMedia("(prefers-color-scheme: dark)");
   scheme.addEventListener("change", readColors);
@@ -134,6 +136,7 @@ function startLorenz(canvas) {
     // At its widest (face-on, as the view turns) it spans about 56 units, so 0.98 of the width never clips.
     scale = tally ? Math.min((w * 0.98) / 56, (h * 0.9) / 50) : Math.min((w * 0.8) / 56, (h * 0.55) / 50);
     cx = w / 2; cy = h / 2 + 25 * scale;
+    readColors();
   }
   watch(new ResizeObserver(resize), canvas);
   resize();

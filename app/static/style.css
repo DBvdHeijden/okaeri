@@ -12,6 +12,8 @@
   --line: #E8E8E5;
   --chip: #EFEFEC;
   --accent: #2457B8;
+  --warm: #CC6526;      /* the name, and the top of the figure */
+  --warm-end: #D98A22;  /* where the figure's gradient ends */
   --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", "IBM Plex Sans JP", ui-monospace, "SF Mono", Menlo, monospace;
   color-scheme: light;
@@ -25,6 +27,8 @@
     --line: #2C2C2A;
     --chip: #262624;
     --accent: #86AEF2;
+    --warm: #F2A066;
+    --warm-end: #F5C26B;
     color-scheme: dark;
   }
 }
@@ -36,6 +40,8 @@
   --line: #2C2C2A;
   --chip: #262624;
   --accent: #86AEF2;
+  --warm: #F2A066;
+  --warm-end: #F5C26B;
   color-scheme: dark;
 }
 
@@ -150,6 +156,8 @@ button { font: inherit; color: inherit; }
 }
 
 /* Header */
+
+.masthead .name { color: var(--warm); }
 
 .masthead { margin-bottom: 20px; }
 
