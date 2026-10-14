@@ -21,14 +21,15 @@ import httpx
 
 from app import ROOT, settings
 from app.embed import pending
-from app.models import MAX_AGE_DAYS, FetchedItem, Source
+from app.models import FetchedItem, Source
+from app.sources import MEDIA
 from app.store import Store
 
 log = logging.getLogger("okaeri.fetch")
 
 USER_AGENT = "okaeri/0.1 (+https://github.com/DBvdHeijden/okaeri)"
 PER_SOURCE_LIMIT = 30  # newest items kept per fetch; stops arXiv/OpenAI archives flooding
-MAX_AGE = timedelta(days=max(MAX_AGE_DAYS.values()))  # per-format limits are applied when reading
+MAX_AGE = timedelta(days=max(m["max_age_days"] for m in MEDIA.values()))  # per-medium limits are applied when reading
 CONCURRENCY = 8
 HOST_INTERVAL = {"export.arxiv.org": 3.0}  # arXiv API asks for >= 3s between requests
 TICK_SECONDS = 60

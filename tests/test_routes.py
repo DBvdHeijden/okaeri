@@ -3,7 +3,7 @@ import re
 from fastapi.testclient import TestClient
 
 from app import server, settings
-from app.sources import SOURCES
+from app.sources import MEDIA, SOURCES
 from app.store import article_id
 from tests.conftest import item
 
@@ -44,7 +44,8 @@ def test_home_merges_and_orders(store):
 
 
 def set_tabs(*tabs):
-    settings.save({**settings.load(), "tabs": [{"name": name, "tags": tags} for name, tags in tabs]})
+    rows = [{"name": name, "media": [t for t in tags if t in MEDIA], "topics": [t for t in tags if t not in MEDIA]} for name, tags in tabs]
+    settings.save({**settings.load(), "tabs": rows})
 
 
 def test_tab_filter(store):
@@ -103,9 +104,10 @@ def test_onboarding_lists_sources_and_checks_selected(store):
     settings.set_interests(["forum"], ["ai"])
     settings.set_enabled_sources(["hn"])
     html = client.get("/onboarding/sources").text
-    assert all(s.name in html for s in SOURCES if "ai" in s.tags)
+    assert all(s.name in html for s in SOURCES if s.medium == "forum" and "ai" in s.tags)
     assert "Hacker News" in html  # no field at all: offered with any
     assert "eLife" not in html  # biology only: left for Settings
+    assert "arXiv cs.LG" not in html  # AI, but a paper: left for Settings
     assert re.search(r'value="hn" checked', html)
     assert not re.search(r'value="lobsters" checked', html)
 

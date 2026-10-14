@@ -2,7 +2,7 @@
   "name": "",
   "languages": ["en", "nl"],
   "interests": {
-    "formats": [],
+    "media": [],
     "topics": []
   },
   "ranking": {"like": 0.5, "hidden": 0.5, "fresh": 0.5, "popular": 0.5, "random": 0.5},
@@ -12,11 +12,11 @@
   },
   "tabs": [
     {"builtin": "all", "hidden": false},
-    {"name": "AI", "tags": ["ai"], "hidden": false},
-    {"name": "Papers", "tags": ["paper"], "hidden": false},
-    {"name": "Science", "tags": ["science", "physics", "math"], "hidden": false},
-    {"name": "Tech", "tags": ["software", "tech"], "hidden": false},
-    {"name": "World", "tags": ["world"], "hidden": false},
+    {"name": "AI", "topics": ["ai"], "hidden": false},
+    {"name": "Papers", "media": ["paper"], "hidden": false},
+    {"name": "Science", "topics": ["science", "physics", "math"], "hidden": false},
+    {"name": "Tech", "topics": ["software", "tech"], "hidden": false},
+    {"name": "World", "topics": ["world"], "hidden": false},
     {"builtin": "history", "hidden": false}
   ]
 }

@@ -11,7 +11,7 @@ def test_merge_prefers_non_forum_source(store):
     assert (a.title, a.source, a.also_on, a.discussion_url) == ("Real title", "Julia Evans", ("Hacker News",), "https://hn/1")
 
 
-def test_age_limit_depends_on_format(store):
+def test_age_limit_depends_on_medium(store):
     four_days = 24 * 4
     store.save_fetch("nos", [item("https://nos.nl/a", hours_ago=four_days)], None, None)  # news: 3 days
     store.save_fetch("nature", [item("https://nature.com/a", hours_ago=four_days)], None, None)  # papers: 14 days

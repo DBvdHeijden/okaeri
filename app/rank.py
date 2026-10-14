@@ -13,8 +13,8 @@ from datetime import UTC, date, datetime
 
 import numpy as np
 
-from app.models import MAX_AGE_DAYS, Article, Event
-from app.sources import format_of
+from app.models import Article, Event
+from app.sources import MEDIA, medium_of
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ def closeness(articles: list[Article], keys: list[str], vectors: dict[str, np.nd
 def freshness(articles: list[Article]) -> np.ndarray:
     """1 when just published, 0 when the story is about to leave the homepage; news fades faster than blogs."""
     now = datetime.now(UTC)
-    days = np.array([(now - a.published_at).total_seconds() / 86400 / MAX_AGE_DAYS[format_of(a)] for a in articles])
+    days = np.array([(now - a.published_at).total_seconds() / 86400 / MEDIA[medium_of(a)]["max_age_days"] for a in articles])
     return np.clip(1 - days, 0, 1)
 
 

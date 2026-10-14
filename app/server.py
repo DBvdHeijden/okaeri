@@ -20,7 +20,7 @@ from app.fetch import Refresher
 from app.models import Article, Source
 from app.rank import learn, rank, sample, switched_on
 from app.sources import (
-    BY_ID, FORMATS, LANGUAGES, SOURCES, TAG_DESCRIPTIONS, TOPICS, format_of, in_tab, source_format, source_matches, speaks,
+    BY_ID, LANGUAGES, MEDIA, SOURCES, TAG_DESCRIPTIONS, TOPICS, in_tab, medium_of, source_matches, speaks,
 )
 from app.store import Store, default_path, open_store
 
@@ -32,7 +32,6 @@ SAMPLE_SIZE = 5
 HISTORY_SIZE = 100
 HISTORY_VIEWS = {"opened": "Opened", "liked": "Liked", "hidden": "Hidden"}
 
-FORMAT_GROUPS = {"paper": "Papers", "blog": "Blogs", "forum": "Forums", "news": "News"}  # onboarding sections
 
 
 def store() -> Store:
@@ -106,7 +105,8 @@ def count(n: int, word: str) -> str:
 
 templates.env.filters["ago"] = ago
 templates.env.filters["count"] = count
-templates.env.globals["format_of"] = format_of
+templates.env.globals["medium_of"] = medium_of
+templates.env.globals["media"] = MEDIA
 templates.env.globals["tag_descriptions"] = TAG_DESCRIPTIONS
 templates.env.filters["language_name"] = LANGUAGES.get
 
@@ -138,7 +138,7 @@ def home(
     if active["history"]:
         ranked = history(show)
     else:
-        pool = [a for a in store().articles(selected) if in_tab(a, active["tags"], active["sources"])]
+        pool = [a for a in store().articles(selected) if in_tab(a, active)]
         vectors = stored_vectors(store()) if active["sort"] == "recommended" else None
         ranked = rank(pool, store().events(), settings.load(), vectors, active["sort"])
     return templates.TemplateResponse(
@@ -232,7 +232,6 @@ def tab_editor_context() -> dict:
     ids = {*settings.enabled_sources(), *(s for t in tabs for s in t["sources"])}
     return {
         "tabs": tabs,
-        "formats": list(FORMAT_GROUPS),
         "topics": sorted(TOPICS),
         "source_choices": sorted((BY_ID[i] for i in ids if i in BY_ID), key=lambda s: s.name.lower()),
         "max_tabs": settings.MAX_TABS,
@@ -240,7 +239,6 @@ def tab_editor_context() -> dict:
 
 
 templates.env.filters["source_name"] = lambda id: BY_ID[id].name
-templates.env.globals["source_format"] = source_format
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -249,8 +247,8 @@ def settings_page(request: Request):
     if not enabled:
         return RedirectResponse("/onboarding", status_code=303)
     groups = [
-        (label, sorted((s for s in spoken_sources() if source_format(s) == f), key=lambda s: s.id not in enabled))
-        for f, label in FORMAT_GROUPS.items()
+        (medium["label"], sorted((s for s in spoken_sources() if s.medium == m), key=lambda s: s.id not in enabled))
+        for m, medium in MEDIA.items()
     ]
     return templates.TemplateResponse(
         request,
@@ -294,8 +292,8 @@ def spoken_sources() -> list[Source]:
     return [s for s in SOURCES if speaks(s, settings.languages())]
 
 
-def source_count(tag: str) -> int:
-    return sum(tag in s.tags for s in spoken_sources())
+def source_count(fits) -> int:
+    return sum(map(fits, spoken_sources()))
 
 
 @app.post("/history/clear")
@@ -352,8 +350,8 @@ def onboarding_languages_submit(languages: Annotated[list[str] | None, Form()] =
 
 def interests_page(request: Request, chosen: set[str], missing: str = "", status_code: int = 200) -> HTMLResponse:
     groups = [
-        ("Fields", "topics", [(t, t, source_count(t)) for t in sorted(TOPICS)]),
-        ("Formats", "formats", [(f, label, source_count(f)) for f, label in FORMAT_GROUPS.items()]),
+        ("Fields", "topics", [(t, t, TAG_DESCRIPTIONS[t], source_count(lambda s: t in s.tags)) for t in sorted(TOPICS)]),
+        ("Media", "media", [(m, medium["label"], medium["description"], source_count(lambda s: s.medium == m)) for m, medium in MEDIA.items()]),
     ]
     return templates.TemplateResponse(
         request, "onboarding_interests.html", {"groups": groups, "chosen": chosen, "missing": missing}, status_code=status_code
@@ -363,39 +361,34 @@ def interests_page(request: Request, chosen: set[str], missing: str = "", status
 @app.get("/onboarding/interests", response_class=HTMLResponse)
 def onboarding_interests(request: Request):
     interests = settings.interests()
-    return interests_page(request, {*interests["formats"], *interests["topics"]})
+    return interests_page(request, {*interests["media"], *interests["topics"]})
 
 
 @app.post("/onboarding/interests")
 def onboarding_interests_submit(
-    request: Request, formats: Annotated[list[str] | None, Form()] = None, topics: Annotated[list[str] | None, Form()] = None
+    request: Request, media: Annotated[list[str] | None, Form()] = None, topics: Annotated[list[str] | None, Form()] = None
 ):
-    formats = [f for f in formats or [] if f in FORMATS]
+    media = [m for m in media or [] if m in MEDIA]
     topics = [t for t in topics or [] if t in TOPICS]
-    if not formats or not topics:
+    if not media or not topics:
         # The same step again, with your picks and what's missing. 422: Turbo only shows a failed form's page.
-        missing = " and ".join(word for word, picked in (("one field", topics), ("one format", formats)) if not picked)
-        return interests_page(request, {*formats, *topics}, f"Pick at least {missing}.", 422)
-    settings.set_interests(formats, topics)
+        missing = " and ".join(word for word, picked in (("one field", topics), ("one medium", media)) if not picked)
+        return interests_page(request, {*media, *topics}, f"Pick at least {missing}.", 422)
+    settings.set_interests(media, topics)
     return RedirectResponse("/onboarding/sources", status_code=303)
 
 
 @app.get("/onboarding/sources", response_class=HTMLResponse)
 def onboarding_sources(request: Request):
     interests = settings.interests()
-    spoken = spoken_sources()
-    # First time through, everything that matches starts checked.
-    selected = settings.enabled_sources() or [
-        s.id for s in spoken if source_matches(s, interests["formats"], interests["topics"])
-    ]
+    # Only sources in a medium you picked and in one of your fields (or in none, like Hacker News): onboarding stays
+    # short, and Settings has them all. First time through, they all start checked.
+    offered = [s for s in spoken_sources() if source_matches(s, interests["media"], interests["topics"])]
+    selected = settings.enabled_sources() or [s.id for s in offered]
     # A fold per field you picked, as in the step before; each source once, under the first of yours it covers.
-    # Sources in none of your fields aren't offered here: onboarding stays short, and Settings has them all.
     groups: dict[str, list[Source]] = {t: [] for t in interests["topics"]} | {"general": []}
-    for s in spoken:
-        own = set(s.tags) & TOPICS
-        field = next((t for t in interests["topics"] if t in own), None if own else "general")
-        if field:
-            groups[field].append(s)
+    for s in offered:
+        groups[next((t for t in interests["topics"] if t in s.tags), "general")].append(s)
     groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items() if sources}
     return templates.TemplateResponse(
         request, "onboarding_sources.html", {"groups": list(groups.items()), "selected": selected}
@@ -418,7 +411,7 @@ def sample_pool(shuffle: bool = False) -> list[Article]:
     interests = settings.interests()
     pool = [
         a for a in store().articles(selected)
-        if any(source_matches(BY_ID[s], interests["formats"], interests["topics"]) for s in a.source_ids)
+        if any(source_matches(BY_ID[s], interests["media"], interests["topics"]) for s in a.source_ids)
     ]
     events = store().events()
     rated = switched_on(events, "seed", "unseed") | switched_on(events, "hide", "unhide")

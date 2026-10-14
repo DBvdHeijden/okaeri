@@ -6,7 +6,7 @@
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>What are you curious about?</h1>
-    <p class="date">Step 3 of 6 · Pick the fields and formats you enjoy: at least one of each.</p>
+    <p class="date">Step 3 of 6 · Pick the fields you enjoy and the media to read them in: at least one of each.</p>
   </div>
 </header>
 
@@ -16,12 +16,12 @@
   <fieldset class="group">
     <legend>{{ legend }}</legend>
     <ul class="sources">
-      {% for value, label, n in options %}
+      {% for value, label, description, n in options %}
       <li>
         <label class="source">
           <span class="source-text">
             <span class="source-name">{{ label }}</span>
-            <span class="source-desc">{{ tag_descriptions[value] }} · {{ n | count("source") }}</span>
+            <span class="source-desc">{{ description }} · {{ n | count("source") }}</span>
           </span>
           <input type="checkbox" class="check" aria-label="{{ label }}" name="{{ name }}" value="{{ value }}" {% if value in chosen %}checked{% endif %}>
         </label>

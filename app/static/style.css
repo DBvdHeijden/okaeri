@@ -406,7 +406,7 @@ h1 {
   color: var(--muted);
 }
 
-/* Settings: collapsible sections (Tabs, Sources, and a nested one per format), closed on load */
+/* Settings: collapsible sections (Tabs, Sources, and a nested one per medium), closed on load */
 
 .folds { margin-top: 32px; }
 
@@ -445,7 +445,7 @@ h1 {
 .fold .sources { margin-bottom: 12px; }
 .fold .sources li:last-child { border-bottom: 0; }
 
-/* Nested format sections sit indented inside Sources */
+/* Nested medium sections sit indented inside Sources */
 .subfolds { margin: 8px 0 12px 16px; }
 .subfolds .fold:first-of-type { border-top: 1px solid var(--line); }
 .subfolds .fold:last-of-type { border-bottom: 0; }
@@ -477,7 +477,7 @@ h1 {
 .tab-name:focus-visible { border-color: var(--accent); outline: none; }
 .tab-editor [data-remove-tab] { margin-left: -4px; color: var(--muted); font-size: 14px; }
 
-/* Tab filters: Formats, then Topics, then Sources; each row narrows the one above. */
+/* Tab filters: Media, then Topics, then Sources; each row narrows the one above. */
 .tab-filter { display: flex; align-items: center; gap: 12px; min-height: 36px; }
 .tab-filter-label { flex-shrink: 0; width: 64px; font: 12px var(--mono); color: var(--muted); }
 .tab-filter-count { font: 12px var(--mono); color: var(--muted); }

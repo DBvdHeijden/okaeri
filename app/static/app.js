@@ -325,16 +325,16 @@
     const list = tabsEditor.querySelector("[data-tab-list]");
     const addBtn = tabsEditor.querySelector("[data-add-tab]");
     const rows = () => [...list.querySelectorAll("[data-tab-row]")];
-    // A source the formats and topics no longer offer is hidden; it doesn't count (the editor itself may be closed).
+    // A source the media and topics no longer offer is hidden; it doesn't count (the editor itself may be closed).
     const picked = (row, kind) => [...row.querySelectorAll(`[data-pick="${kind}"]:checked`)].filter((c) => !c.closest("label").hidden);
 
-    // Each row narrows the one above: only sources in the picked formats and topics are offered.
+    // Each row narrows the one above: only sources in the picked media and topics are offered.
     const narrow = (row) => {
-      const formats = picked(row, "format").map((c) => c.value);
+      const media = picked(row, "medium").map((c) => c.value);
       const topics = picked(row, "topic").map((c) => c.value);
       let left = 0;
       for (const box of row.querySelectorAll('[data-pick="source"]')) {
-        const fits = (!formats.length || formats.includes(box.dataset.format)) &&
+        const fits = (!media.length || media.includes(box.dataset.medium)) &&
           (!topics.length || box.dataset.topics.split(" ").some((t) => topics.includes(t)));
         box.closest("label").hidden = !fits;
         left += fits;
@@ -350,7 +350,7 @@
       for (const row of custom) {
         narrow(row);
         row.querySelector("[data-tab-title]").textContent = row.querySelector("[data-tab-name]").value.trim() || "New tab";
-        const parts = [...picked(row, "format"), ...picked(row, "topic")].map((c) => c.value)
+        const parts = [...picked(row, "medium"), ...picked(row, "topic")].map((c) => c.value)
           .concat(picked(row, "source").map((c) => c.closest("label").textContent.trim()));
         row.querySelector("[data-tab-summary]").textContent = parts.join(" · ") || "Everything";
       }
@@ -396,7 +396,8 @@
       tabsEditor.querySelector("[name=tabs]").value = JSON.stringify(rows().map((row) => ({
         builtin: row.dataset.builtin,
         name: row.querySelector("[data-tab-name]")?.value.trim(),
-        tags: [...picked(row, "format"), ...picked(row, "topic")].map((c) => c.value),
+        media: picked(row, "medium").map((c) => c.value),
+        topics: picked(row, "topic").map((c) => c.value),
         sources: picked(row, "source").map((c) => c.value),  // only those still offered
         hidden: row.classList.contains("is-hidden"),
         sort: row.querySelector("[data-sort-tab]")?.dataset.sort,

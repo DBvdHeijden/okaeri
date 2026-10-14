@@ -53,14 +53,14 @@
         {%- set link_names = thread and a.comments is none %}
         {#- One span per part; the stylesheet puts a dash between them. #}
         <p class="meta">
-          {%- set format = format_of(a) %}
-          <span>{% if not tab.history and link_names and format == "forum" %}<a href="/r/{{ a.id }}?to=thread" target="_blank" rel="noopener">{{ a.source }}</a>{% else %}{{ a.source }}{% endif %}</span>
+          {%- set medium = medium_of(a) %}
+          <span>{% if not tab.history and link_names and medium == "forum" %}<a href="/r/{{ a.id }}?to=thread" target="_blank" rel="noopener">{{ a.source }}</a>{% else %}{{ a.source }}{% endif %}</span>
           {%- if tab.history %}{% set when = a.published_at | ago %}
           <span>{{ show }} <time datetime="{{ a.published_at.isoformat() }}">{{ "just now" if when == "now" else when ~ " ago" }}</time></span>
           {%- else %}
           <span><time datetime="{{ a.published_at.isoformat() }}">{{ a.published_at | ago }}</time></span>
           {%- if a.also_on %}
-          <span>{% if link_names and format != "forum" %}<a href="/r/{{ a.id }}?to=thread" target="_blank" rel="noopener">also on {{ a.also_on | join(", ") }}</a>{% else %}also on {{ a.also_on | join(", ") }}{% endif %}</span>
+          <span>{% if link_names and medium != "forum" %}<a href="/r/{{ a.id }}?to=thread" target="_blank" rel="noopener">also on {{ a.also_on | join(", ") }}</a>{% else %}also on {{ a.also_on | join(", ") }}{% endif %}</span>
           {%- endif %}
           {%- if a.score is not none %}
           <span>{{ stat(a.score, "point", points_icon) }}</span>

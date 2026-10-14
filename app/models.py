@@ -2,9 +2,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-# How long a story stays on the homepage, by format tag. News goes stale fast; blogs post rarely.
-MAX_AGE_DAYS: dict[str, int] = {"paper": 14, "blog": 60, "forum": 7, "news": 3}
-
 # "rss" covers RSS and Atom (feedparser handles both); the rest are JSON APIs
 # used where the RSS feed lacks points and comment counts.
 Fetcher = Literal["rss", "hf_papers", "hn_algolia", "lobsters_json", "lw_graphql"]
@@ -14,7 +11,8 @@ Fetcher = Literal["rss", "hf_papers", "hn_algolia", "lobsters_json", "lw_graphql
 class Source:
     id: str
     name: str
-    tags: tuple[str, ...]  # exactly one format tag, 0-2 topic tags; read through app.sources
+    medium: str  # paper, blog, news or forum: see app.sources
+    tags: tuple[str, ...]  # 0-2 topics
     url: str  # what we fetch
     site: str  # what we show
     language: str  # ISO 639-1 code of the feed's language, e.g. "en", "nl"

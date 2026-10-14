@@ -6,7 +6,7 @@ import re
 import shutil
 
 from app import ROOT
-from app.sources import BY_ID, FORMATS, TOPICS, known_sources, known_tags, tab_covers
+from app.sources import BY_ID, MEDIA, TOPICS, known_media, known_sources, known_tags, tab_covers
 
 log = logging.getLogger("okaeri")
 
@@ -14,16 +14,28 @@ PATH = ROOT / "settings.json"
 EXAMPLE = ROOT / "settings.example.json"
 MAX_TABS = 6  # custom tabs, besides All and History
 # History is chronological by design; every other tab sorts by "latest" or "recommended".
-ALL_TAB = {"name": "All", "slug": "all", "tags": (), "sources": (), "history": False, "builtin": True, "sort": "latest"}
-HISTORY_TAB = {"name": "History", "slug": "history", "tags": (), "sources": (), "history": True, "builtin": True, "sort": "latest"}
+ALL_TAB = {"name": "All", "slug": "all", "media": (), "topics": (), "sources": (), "history": False, "builtin": True, "sort": "latest"}
+HISTORY_TAB = {"name": "History", "slug": "history", "media": (), "topics": (), "sources": (), "history": True, "builtin": True, "sort": "latest"}
 
 
 def load() -> dict:
     if not PATH.exists():
         shutil.copy(EXAMPLE, PATH)
     # settings.json overrides the defaults key by key, so new settings reach existing users.
-    defaults, own = json.loads(EXAMPLE.read_text()), json.loads(PATH.read_text())
+    defaults, own = json.loads(EXAMPLE.read_text()), upgrade(json.loads(PATH.read_text()))
     return defaults | own | {"ranking": defaults["ranking"] | own.get("ranking", {})}
+
+
+def upgrade(settings: dict) -> dict:
+    """Older settings kept the medium among the tags ("formats"); the next save writes the new shape."""
+    interests = settings.get("interests", {})
+    if "formats" in interests:
+        settings["interests"] = {"media": interests["formats"], "topics": interests.get("topics", [])}
+    for tab in settings.get("tabs", []):
+        if "tags" in tab:
+            tags = tab.pop("tags")
+            tab["media"], tab["topics"] = [t for t in tags if t in MEDIA], [t for t in tags if t not in MEDIA]
+    return settings
 
 
 def reset() -> None:
@@ -53,7 +65,8 @@ def all_tabs() -> list[dict]:
         {
             "name": t["name"],
             "slug": slug(t["name"]),
-            "tags": known_tags(t["tags"], f"tab {t['name']!r}"),
+            "media": known_media(t.get("media", []), f"tab {t['name']!r}"),
+            "topics": known_tags(t.get("topics", []), f"tab {t['name']!r}"),
             "sources": known_sources(t.get("sources", []), f"tab {t['name']!r}"),
             "history": False,
             "builtin": False,
@@ -103,9 +116,9 @@ def interests() -> dict:
     return load()["interests"]
 
 
-def set_interests(formats: list[str], topics: list[str]) -> None:
+def set_interests(media: list[str], topics: list[str]) -> None:
     settings = load()
-    settings["interests"] = {"formats": formats, "topics": topics}
+    settings["interests"] = {"media": media, "topics": topics}
     save(settings)
 
 
@@ -157,10 +170,11 @@ def set_tabs(rows: list[dict]) -> None:
         if row.get("builtin") or not slug(name) or slug(name) in taken:
             continue
         taken.add(slug(name))
-        tags = [t for t in row.get("tags", []) if t in FORMATS | TOPICS]
-        # Picked sources the formats and topics no longer leave over would narrow invisibly: drop them.
-        sources = [s for s in row.get("sources", []) if s in BY_ID and tab_covers(BY_ID[s], tags, ())]
-        custom.append({"name": name, "tags": tags, "sources": sources, "hidden": bool(row.get("hidden")), "sort": sort_of(row)})
+        media = [m for m in row.get("media", []) if m in MEDIA]
+        topics = [t for t in row.get("topics", []) if t in TOPICS]
+        # Picked sources the media and topics no longer leave over would narrow invisibly: drop them.
+        sources = [s for s in row.get("sources", []) if s in BY_ID and tab_covers(BY_ID[s], {"media": media, "topics": topics})]
+        custom.append({"name": name, "media": media, "topics": topics, "sources": sources, "hidden": bool(row.get("hidden")), "sort": sort_of(row)})
     settings = load()
     settings["tabs"] = [
         {"builtin": "all", "hidden": bool(builtin.get("all", {}).get("hidden")), "sort": sort_of(builtin.get("all", {}))},

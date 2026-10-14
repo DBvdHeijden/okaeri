@@ -3,11 +3,11 @@
     "en": "English",
     "nl": "Dutch"
   },
-  "formats": {
-    "paper": "Peer-reviewed research and preprints, straight from journals and arXiv.",
-    "blog": "Personal and lab blogs: slower, longer, opinionated.",
-    "forum": "Link aggregators and discussion boards, ranked by their communities.",
-    "news": "Newsrooms and magazines reporting as it happens."
+  "media": {
+    "paper": {"label": "Papers", "max_age_days": 14, "description": "Peer-reviewed research and preprints, straight from journals and arXiv."},
+    "blog": {"label": "Blogs", "max_age_days": 60, "description": "Personal, lab and company blogs and newsletters: slower, longer, opinionated."},
+    "news": {"label": "News", "max_age_days": 3, "description": "Newsrooms and magazines reporting as it happens."},
+    "forum": {"label": "Forums", "max_age_days": 7, "description": "Link aggregators and discussion boards, ranked by their communities."}
   },
   "topics": {
     "ai": "Machine learning, language models and the people building them.",

@@ -53,7 +53,7 @@ Everything lives in the repo folder and is never committed: `data/` holds the da
 
 ## Sources
 
-Pick sources on the Settings page (the gear), or list their ids under `sources.enabled` in `settings.json`; the ids are in `catalog/sources.json`. To add a feed that isn't in the catalog, add an entry there (one format tag, up to two topic tags from `catalog/tags.json`) and send it as a pull request, since `update` stops while you have local changes.
+Pick sources on the Settings page (the gear), or list their ids under `sources.enabled` in `settings.json`; the ids are in `catalog/sources.json`. To add a feed that isn't in the catalog, add an entry there (one medium and up to two topic tags from `catalog/tags.json`) and send it as a pull request, since `update` stops while you have local changes.
 
 ## Embedding model
 
@@ -70,7 +70,7 @@ OKAERI_PORT=12363 uv run main.py   # another port; works for the service command
 uv run pytest
 ```
 
-On first run you're sent to onboarding: pick fields and formats, then sources, then tick a few sample stories you'd read (saved as seed events for ranking). Nothing is fetched until you pick sources.
+On first run you're sent to onboarding: pick fields and media, then sources, then tick a few sample stories you'd read (saved as seed events for ranking). Nothing is fetched until you pick sources.
 
 Embedding runs in a short-lived child process, `python -m app.embed`, so the server never holds the model in memory: the 270M text model, 8-bit ONNX from [onnx-community/embeddinggemma-2-ONNX](https://huggingface.co/onnx-community/embeddinggemma-2-ONNX), pinned to a revision, vectors cut to 256 dims and stored in SQLite. Try them out:
 
@@ -85,12 +85,12 @@ Layout:
 
 - `main.py`: runs the server (uvicorn on 127.0.0.1, one worker) and the service commands.
 - `catalog/sources.json`: the curated source catalog.
-- `catalog/tags.json`: the tag vocabulary: formats (paper, blog, forum, news) and topics.
-- `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it. Tabs live here, edited in onboarding step 4 and in Settings: `{"builtin": "all"|"history", "hidden"}` or custom `{"name", "tags", "sources", "hidden"}`. Each narrows the one before: the format tags, then the topic tags within those, then just the listed source ids. Leave one out and it doesn't narrow; nothing at all shows everything. All is always first and History last.
+- `catalog/tags.json`: the media (paper, blog, news, forum: each source is one, see `app/sources.py`), with their labels and how long their stories stay; and the topic tags.
+- `settings.example.json`: copied to `settings.json` (gitignored) on first run; the onboarding page writes it. Tabs live here, edited in onboarding step 4 and in Settings: `{"builtin": "all"|"history", "hidden"}` or custom `{"name", "media", "topics", "sources", "hidden"}`. Each narrows the one before: the media, then the topics within those, then just the listed source ids. Leave one out and it doesn't narrow; nothing at all shows everything. All is always first and History last.
 - `data/`: the SQLite database, downloaded models and the log (gitignored).
 - `app/server.py`: routes. Every article list passes through `rank()`.
 - `app/rank.py`: the ranking seam: Latest (recency) or Recommended (nearest opened/liked story, minus half the nearest hidden one).
-- `app/sources.py`: loads the catalog; `tags_for()`, `format_of()` and tab matching.
+- `app/sources.py`: loads the catalog; `tags_for()`, `medium_of()` and tab matching.
 - `app/fetch.py`: feed parsing (RSS/Atom, HF papers), conditional GET, and the background refresher.
 - `app/embed.py`: loads the embedding model and embeds new items.
 - `app/settings.py`: reads and writes `settings.json`.
