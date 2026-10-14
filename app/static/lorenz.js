@@ -112,13 +112,53 @@ function startLorenz(canvas) {
     }), tally, { attributes: true, attributeFilter: ["data-liked", "data-disliked"] });
   }
 
-  // Warm from top to bottom of the figure (z runs 0..50); rebuilt when the theme or size changes.
-  let trailColor = null;
+  // Warm from top to bottom of the figure. On a theme switch the page's blind (style.css: theme-drop / theme-lift,
+  // 640ms, cubic-bezier(0.45, 0, 0.2, 1)) slides between dark above and light below; the trail changes colour along
+  // the same edge, so it never shows one theme's colours on the other's background.
+  const BLIND_MS = 640;
+  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const mix = (a, b, t) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t))})`;
+  const bezier = (p1, p2, t) => 3 * p1 * t * (1 - t) ** 2 + 3 * p2 * t * t * (1 - t) + t ** 3;
+  function ease(x) {
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 16; i++) {
+      const t = (lo + hi) / 2;
+      if (bezier(0.45, 0.2, t) < x) lo = t; else hi = t;
+    }
+    return bezier(0, 1, (lo + hi) / 2);
+  }
+
+  let palette = null, blind = null;  // blind: the switch under way, with the palette it came from
   function readColors() {
     const css = getComputedStyle(document.documentElement);
-    trailColor = ctx.createLinearGradient(0, cy - 50 * scale, 0, cy);
-    trailColor.addColorStop(0, css.getPropertyValue("--warm").trim());
-    trailColor.addColorStop(1, css.getPropertyValue("--warm-end").trim());
+    const before = palette;
+    palette = [rgb(css.getPropertyValue("--warm").trim()), rgb(css.getPropertyValue("--warm-end").trim())];
+    const direction = document.documentElement.dataset.themeTransition;
+    if (direction && before) blind = { start: performance.now(), down: direction === "down", before, top: canvas.getBoundingClientRect().top };
+  }
+  readColors();
+
+  function trailColor(now) {
+    const top = cy - 50 * scale, bottom = cy;  // the figure's ends (z runs 0..50)
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    // One palette from height `from` to `to`: its colour at both ends, and at the figure's ends in between.
+    const paint = (colors, from, to) => {
+      for (const y of [from, top, bottom, to]) {
+        if (y < from || y > to) continue;
+        gradient.addColorStop(y / h, mix(colors[0], colors[1], Math.min(1, Math.max(0, (y - top) / (bottom - top)))));
+      }
+    };
+    if (blind && now - blind.start >= BLIND_MS) blind = null;
+    if (!blind) {
+      paint(palette, 0, h);
+      return gradient;
+    }
+    const p = ease((now - blind.start) / BLIND_MS);
+    const edge = Math.min(h, Math.max(0, innerHeight * (blind.down ? p : 1 - p) - blind.top));
+    const [dark, light] = blind.down ? [palette, blind.before] : [blind.before, palette];
+    paint(dark, 0, edge);
+    paint(light, edge, h);
+    return gradient;
   }
   watch(new MutationObserver(readColors), document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   const scheme = matchMedia("(prefers-color-scheme: dark)");
@@ -136,7 +176,6 @@ function startLorenz(canvas) {
     // At its widest (face-on, as the view turns) it spans about 56 units, so 0.98 of the width never clips.
     scale = tally ? Math.min((w * 0.98) / 56, (h * 0.9) / 50) : Math.min((w * 0.8) / 56, (h * 0.55) / 50);
     cx = w / 2; cy = h / 2 + 25 * scale;
-    readColors();
   }
   watch(new ResizeObserver(resize), canvas);
   resize();
@@ -162,7 +201,7 @@ function startLorenz(canvas) {
 
     ctx.lineJoin = "round";
     ctx.lineCap = "butt"; // round caps would overlap at stroke joins and show as beads
-    ctx.strokeStyle = trailColor;
+    ctx.strokeStyle = trailColor(performance.now());
     let px = screenX(start), py = screenY(start);
     let bucket = -1, level = -1;
     for (let k = 1; k < count; k++) {
