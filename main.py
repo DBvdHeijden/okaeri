@@ -12,8 +12,11 @@ import shutil
 import socket
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 import urllib.request
+import webbrowser
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -30,6 +33,8 @@ DEFAULT_PORT = 12362
 PORT = int(os.environ.get("OKAERI_PORT", DEFAULT_PORT))
 URL = f"http://localhost:{PORT}"
 LOG = ROOT / "data" / "okaeri.log"
+VERSION = ROOT / "VERSION"  # the commit an install.sh download came from; git checkouts don't have it
+REPO = "DBvdHeijden/okaeri"
 MAX_LOG_BYTES = 5 * 2**20
 MAC, LINUX = sys.platform == "darwin", sys.platform.startswith("linux")
 
@@ -171,6 +176,60 @@ def require_installed() -> None:
         sys.exit("okaeri isn't installed as a service. Install it with: uv run main.py install")
 
 
+def find_uv() -> str | None:
+    # `uv run` sets $UV, which works even before a fresh uv install is on the PATH.
+    return os.environ.get("UV") or shutil.which("uv")
+
+
+def version() -> str:
+    if VERSION.exists():
+        return VERSION.read_text()[:7]
+    return run("git", "log", "-1", "--format=%h (%cs)").strip()
+
+
+def latest_commit() -> str:
+    request = urllib.request.Request(f"https://api.github.com/repos/{REPO}/commits/main", headers={"Accept": "application/vnd.github.sha"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read().decode().strip()
+
+
+def replace_code_with(sha: str) -> None:
+    with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+        with urllib.request.urlopen(f"https://github.com/{REPO}/archive/{sha}.tar.gz", timeout=60) as response:
+            tarfile.open(fileobj=response, mode="r|gz").extractall(tmp, filter="data")
+        (download,) = Path(tmp).iterdir()
+        # Only swap what the download contains: data/, settings.json and .venv are never in it, so they stay.
+        for new in download.iterdir():
+            old = ROOT / new.name
+            if old.is_dir():
+                shutil.rmtree(old)
+            elif old.exists():
+                old.unlink()
+            new.rename(old)
+    VERSION.write_text(sha + "\n")
+
+
+def pull_with_git() -> None:
+    if run("git", "status", "--porcelain", "--untracked-files=no").strip():
+        sys.exit("You have local changes (see `git status`). Commit or stash them, then update again.")
+    pull = subprocess.run(["git", "pull", "--ff-only"], cwd=ROOT, capture_output=True, text=True)
+    if pull.returncode != 0:
+        sys.exit(f"Couldn't fast-forward to the latest version, so nothing changed:\n{pull.stderr.strip()}")
+    print(pull.stdout.strip())
+
+
+def download_latest() -> None:
+    try:
+        sha = latest_commit()
+        if VERSION.read_text().strip() == sha:
+            print("Already up to date.")
+            return
+        replace_code_with(sha)
+    except OSError as e:
+        sys.exit(f"Couldn't download the latest version: {e}")
+    print(f"Updated to {sha[:7]}.")
+
+
 def local_time(iso: str) -> str:
     return datetime.fromisoformat(iso).astimezone().strftime("%Y-%m-%d %H:%M")
 
@@ -181,7 +240,7 @@ def local_time(iso: str) -> str:
 def install() -> None:
     if not (MAC or LINUX):
         sys.exit(f"Installing as a service isn't supported on {sys.platform} yet. Run it in a terminal instead: uv run main.py")
-    uv = shutil.which("uv")
+    uv = find_uv()
     if not uv:
         sys.exit("Can't find uv on your PATH. Install it from https://docs.astral.sh/uv/")
     if port_in_use() and not running():
@@ -206,7 +265,10 @@ def install() -> None:
     if not wait_for(answering, 30):
         sys.exit(f"Installed, but {URL} isn't answering yet. See what happened with: uv run main.py logs")
     print(f"okaeri is running at {URL} and starts whenever you log in.")
-    print("Open it to pick your sources. Tip: set it as your browser's homepage or new tab page.")
+    print("Pick your sources there. Tip: set it as your browser's homepage or new tab page.")
+    # Over SSH there's no screen, and webbrowser would start a text browser in this terminal instead.
+    if MAC or os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        webbrowser.open(URL)
 
 
 def uninstall() -> None:
@@ -233,13 +295,11 @@ def restart() -> None:
 
 
 def update() -> None:
-    if run("git", "status", "--porcelain", "--untracked-files=no").strip():
-        sys.exit("You have local changes (see `git status`). Commit or stash them, then update again.")
-    pull = subprocess.run(["git", "pull", "--ff-only"], cwd=ROOT, capture_output=True, text=True)
-    if pull.returncode != 0:
-        sys.exit(f"Couldn't fast-forward to the latest version, so nothing changed:\n{pull.stderr.strip()}")
-    print(pull.stdout.strip())
-    run("uv", "sync", "--frozen")
+    if VERSION.exists():
+        download_latest()
+    else:
+        pull_with_git()
+    run(find_uv(), "sync", "--frozen")
     if installed():
         restart()
     else:
@@ -263,7 +323,7 @@ def status() -> None:
     model_bytes = sum(f.stat().st_size for f in MODEL_DIR.rglob("*") if f.is_file())
     service = "not installed" if not installed() else "installed, running" if running() else "installed, NOT running"
     rows = {
-        "version": run("git", "log", "-1", "--format=%h (%cs)").strip(),
+        "version": version(),
         "service": f"{service} ({LABEL if MAC else NAME})",
         "url": f"{URL} ({'answering' if answering() else 'not answering'})",
         "sources": f"{len(enabled)} enabled",

@@ -3,6 +3,7 @@ name = "okaeri"
 version = "0.1.0"
 description = "A calm localhost homepage for the latest papers, blogs and forums."
 readme = "README.md"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",

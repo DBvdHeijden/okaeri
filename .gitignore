@@ -6,3 +6,4 @@ data/
 settings.json
 *.db
 .DS_Store
+VERSION
