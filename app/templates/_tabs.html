@@ -11,7 +11,8 @@
     <span class="tab-summary" data-tab-summary>
       {%- if t.history %}Links you opened{% elif t.media or t.topics or t.sources %}{{ ((t.media | list) + (t.topics | list) + (t.sources | map("source_name") | list)) | join(" · ") }}{% else %}Everything{% endif -%}
     </span>
-    {% if not t.history %}<button type="button" class="link-btn" data-sort-tab data-sort="{{ t.sort }}">Sort: {{ t.sort }}</button>{% endif %}
+    {#- Both labels, one shown: the button keeps the longer one's width, so the buttons beside it stay put. #}
+    {% if not t.history %}<button type="button" class="link-btn sort-btn" data-sort-tab data-sort="{{ t.sort }}">{% for sort in ("latest", "recommended") %}<span data-label="{{ sort }}">Sort: {{ sort }}</span>{% endfor %}</button>{% endif %}
     <button type="button" class="link-btn" data-hide-tab>{{ "Show" if t.hidden else "Hide" }}</button>
     {% if not t.builtin %}<button type="button" class="link-btn" data-edit-tab>Edit</button>{% endif %}
   </div>

@@ -435,7 +435,7 @@ h1 {
 }
 .fold[open] > summary::after { transform: rotate(225deg); margin-bottom: -3px; }
 /* What a fold opens fades in, just under where it ends up. */
-.fold[open] > :not(summary) { animation: fold-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.fold[open] > :not(summary), .tab-sources[open] > :not(summary) { animation: fold-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1); }
 @keyframes fold-in { from { opacity: 0; transform: translateY(-4px); } }
 .fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
@@ -458,6 +458,11 @@ h1 {
 .tab-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mono); color: var(--muted); }
 .tab-row-head .link-btn { color: var(--muted); font-size: 14px; }
 .tab-row-head .link-btn:hover { color: var(--text); }
+.sort-btn { display: inline-grid; justify-items: start; align-items: center; }
+.sort-btn > span { grid-area: 1 / 1; transition: opacity 140ms ease, visibility 140ms; }
+.sort-btn:not([data-sort="latest"]) > [data-label="latest"],
+.sort-btn:not([data-sort="recommended"]) > [data-label="recommended"] { opacity: 0; visibility: hidden; }
+.tab-title, .tab-summary { transition: opacity 160ms ease; }
 .tab-row.is-hidden .tab-title, .tab-row.is-hidden .tab-summary { opacity: 0.45; }
 
 .tab-editor { padding: 0 0 12px 16px; }
@@ -706,6 +711,6 @@ h1 {
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
-  .row.entering, .row.leaving, .fold[open] > :not(summary) { animation: none; }
+  .row.entering, .row.leaving, .fold[open] > :not(summary), .tab-sources[open] > :not(summary) { animation: none; }
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }

@@ -321,6 +321,21 @@
     setTimeout(() => { if (waiting.isConnected) Turbo.visit(location.href, { action: "replace" }); }, 3000);
   }
 
+  // Opens or closes an element by its height, so what's below it glides along instead of jumping.
+  // Resolves once it's done; a newer slide on the same element takes over from wherever this one got to.
+  const slide = (el, open) => {
+    const done = () => { el.hidden = !open; };
+    if (REDUCED) return Promise.resolve(done());
+    for (const running of el.getAnimations()) running.cancel();
+    el.hidden = false;
+    const { paddingTop, paddingBottom } = getComputedStyle(el);
+    const shut = { height: "0px", paddingTop: "0px", paddingBottom: "0px", opacity: 0 };
+    const full = { height: `${el.offsetHeight}px`, paddingTop, paddingBottom, opacity: 1 };
+    el.style.overflow = "hidden";
+    const animation = el.animate(open ? [shut, full] : [full, shut], { duration: 220, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" });
+    return animation.finished.then(() => { el.style.overflow = ""; done(); }, () => {});
+  };
+
   // Makes a change to a list (change()), then glides each item that moved from where it was, and fades in the ones
   // that are new or came back (FLIP: measure, change, measure again, animate the difference). Items that go, just go.
   const reflow = (items, change) => {
@@ -352,13 +367,16 @@
     const narrow = (row) => {
       const media = picked(row, "medium").map((c) => c.value);
       const topics = picked(row, "topic").map((c) => c.value);
-      let left = 0;
-      for (const box of row.querySelectorAll('[data-pick="source"]')) {
-        const fits = (!media.length || media.includes(box.dataset.medium)) &&
-          (!topics.length || box.dataset.topics.split(" ").some((t) => topics.includes(t)));
-        box.closest("label").hidden = !fits;
-        left += fits;
-      }
+      const boxes = [...row.querySelectorAll('[data-pick="source"]')];
+      const chips = boxes.map((box) => box.closest("label"));
+      const fits = boxes.map((box) => (!media.length || media.includes(box.dataset.medium)) &&
+        (!topics.length || box.dataset.topics.split(" ").some((t) => topics.includes(t))));
+      const apply = () => chips.forEach((chip, i) => { chip.hidden = !fits[i]; });
+      // Only worth animating where you can see it, and when something changes (this also runs as you type a name).
+      const changes = chips.some((chip, i) => chip.hidden === fits[i]);
+      if (changes && row.querySelector(".tab-sources").open) reflow(chips, apply);
+      else apply();
+      const left = fits.filter(Boolean).length;
       const chosen = picked(row, "source").length;
       row.querySelector("[data-source-count]").textContent = !left ? "none" : chosen ? `${chosen} of ${left}` : `all ${left}`;
     };
@@ -375,11 +393,13 @@
         row.querySelector("[data-tab-summary]").textContent = parts.join(" · ") || "Everything";
       }
     };
-    const toggleEditor = (row) => {
+    const toggleEditor = (row, animate = true) => {
+      const open = row.toggleAttribute("data-editing");
       const editor = row.querySelector("[data-tab-editor]");
-      editor.hidden = !editor.hidden;
-      row.querySelector("[data-edit-tab]").textContent = editor.hidden ? "Edit" : "Done";
-      if (!editor.hidden) row.querySelector("[data-tab-name]").focus();
+      row.querySelector("[data-edit-tab]").textContent = open ? "Done" : "Edit";
+      if (animate) slide(editor, open);
+      else editor.hidden = !open;
+      if (open) row.querySelector("[data-tab-name]").focus({ preventScroll: true });
     };
 
     list.addEventListener("click", (e) => {
@@ -387,7 +407,6 @@
       const sortBtn = e.target.closest("[data-sort-tab]");
       if (sortBtn) {
         sortBtn.dataset.sort = sortBtn.dataset.sort === "recommended" ? "latest" : "recommended";
-        sortBtn.textContent = `Sort: ${sortBtn.dataset.sort}`;
         return;
       }
       if (e.target.closest("[data-hide-tab]")) {
@@ -396,7 +415,8 @@
       } else if (e.target.closest("[data-edit-tab]")) {
         toggleEditor(row);
       } else if (e.target.closest("[data-remove-tab]")) {
-        row.remove();
+        slide(row, false).then(() => { row.remove(); update(); });
+        return;
       } else {
         return;
       }
@@ -407,8 +427,9 @@
       // New custom tabs go before History, which stays last.
       const row = tabsEditor.querySelector("[data-tab-template]").content.firstElementChild.cloneNode(true);
       list.insertBefore(row, list.querySelector('[data-builtin="history"]'));
-      toggleEditor(row);
+      toggleEditor(row, false);  // it comes in open, all at once
       update();
+      slide(row, true);
     });
     update();
 
