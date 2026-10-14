@@ -289,12 +289,12 @@
     form.dataset.left = "";
     form.requestSubmit(e.submitter);
   });
-  // The back button brings a page back as it was left, rows faded out: from Turbo's cache, or the browser's.
+  // The back button brings a page back as it was left, rows faded out: from Turbo's cache (init runs then), or the
+  // browser's. Not on turbo:before-cache: that runs on the page still on screen, and the rows would come back.
   const unleave = () => {
     for (const row of document.querySelectorAll(".row.leaving")) row.classList.remove("leaving");
     for (const form of document.querySelectorAll(".view-switch[data-left]")) delete form.dataset.left;
   };
-  document.addEventListener("turbo:before-cache", unleave);
   addEventListener("pageshow", (e) => { if (e.persisted) unleave(); });
   document.addEventListener("keydown", (e) => {
     if (!paging || paging.pager.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -464,6 +464,7 @@
 
   // Set up what's on the page: now, and each time Turbo swaps in another (it doesn't run this script again).
   const init = () => {
+    unleave();
     initConfirms();
     initDials();
     initProgress();
