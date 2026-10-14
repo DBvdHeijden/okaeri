@@ -15,7 +15,14 @@ def titles(html: str) -> list[str]:
     return re.findall(r'class="title" href="[^"]*" target="_blank" rel="noopener">([^<]+)<', html)
 
 
+def newest_first():
+    # These tests read titles in order; Recommended, the default, would mix in the day's surprise.
+    stored = settings.load()
+    settings.save({**stored, "tabs": [{**t, "sort": "latest"} for t in stored["tabs"]]})
+
+
 def seed(store):
+    newest_first()
     settings.set_enabled_sources(["simonw", "hn", "arxiv-cs.lg"])
     store.save_fetch("simonw", [item("https://simonwillison.net/a", "Blog post", hours_ago=2)], None, None)
     store.save_fetch("hn", [
@@ -46,6 +53,7 @@ def test_home_merges_and_orders(store):
 def set_tabs(*tabs):
     rows = [{"name": name, "media": [t for t in tags if t in MEDIA], "topics": [t for t in tags if t not in MEDIA]} for name, tags in tabs]
     settings.save({**settings.load(), "tabs": rows})
+    newest_first()
 
 
 def test_tab_filter(store):

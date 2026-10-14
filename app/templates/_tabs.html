@@ -45,7 +45,7 @@
 <ul class="tab-list" data-tab-list>
   {% for t in tabs %}{{ tab_row(t) }}{% endfor %}
 </ul>
-<template data-tab-template>{{ tab_row({"name": "", "media": [], "topics": [], "sources": [], "sort": "latest"}) }}</template>
+<template data-tab-template>{{ tab_row({"name": "", "media": [], "topics": [], "sources": [], "sort": "recommended"}) }}</template>
 <button type="button" class="link-btn add-tab" data-add-tab>+ New tab</button>
 <input type="hidden" name="tabs">
 {% endmacro %}

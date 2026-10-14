@@ -14,7 +14,7 @@ PATH = ROOT / "settings.json"
 EXAMPLE = ROOT / "settings.example.json"
 MAX_TABS = 6  # custom tabs, besides All and History
 # History is chronological by design; every other tab sorts by "latest" or "recommended".
-ALL_TAB = {"name": "All", "slug": "all", "media": (), "topics": (), "sources": (), "history": False, "builtin": True, "sort": "latest"}
+ALL_TAB = {"name": "All", "slug": "all", "media": (), "topics": (), "sources": (), "history": False, "builtin": True, "sort": "recommended"}
 HISTORY_TAB = {"name": "History", "slug": "history", "media": (), "topics": (), "sources": (), "history": True, "builtin": True, "sort": "latest"}
 
 
@@ -84,7 +84,7 @@ def all_tabs() -> list[dict]:
 
 
 def sort_of(tab: dict) -> str:
-    return "recommended" if tab.get("sort") == "recommended" else "latest"
+    return "latest" if tab.get("sort") == "latest" else "recommended"
 
 
 def tabs() -> list[dict]:
