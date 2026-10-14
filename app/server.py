@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -29,6 +29,7 @@ log = logging.getLogger("okaeri")
 HERE = Path(__file__).parent
 PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 SAMPLE_SIZE = 5
+TOP_SIZE = 5  # the stories onboarding shows while you tune the ranking
 HISTORY_SIZE = 100
 HISTORY_VIEWS = {"opened": "Opened", "liked": "Liked", "hidden": "Hidden"}
 
@@ -123,6 +124,13 @@ def history(view: str) -> list[Article]:
     return store().stories(dict(newest), BY_ID)  # the whole catalog: links stay for sources you no longer follow
 
 
+def feed(selected: dict[str, Source], tab: dict) -> list[Article]:
+    """A tab's stories, in its sort: on the homepage, and while you tune the ranking in onboarding."""
+    pool = [a for a in store().articles(selected) if in_tab(a, tab)]
+    vectors = stored_vectors(store()) if tab["sort"] == "recommended" else None
+    return rank(pool, store().events(), settings.load(), vectors, tab["sort"])
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(
     request: Request,
@@ -138,9 +146,7 @@ def home(
     if active["history"]:
         ranked = history(show)
     else:
-        pool = [a for a in store().articles(selected) if in_tab(a, active)]
-        vectors = stored_vectors(store()) if active["sort"] == "recommended" else None
-        ranked = rank(pool, store().events(), settings.load(), vectors, active["sort"])
+        ranked = feed(selected, active)
     return templates.TemplateResponse(
         request,
         "home.html",
@@ -424,7 +430,7 @@ def sample_pool(shuffle: bool = False) -> list[Article]:
 
 @app.get("/onboarding/sample", response_class=HTMLResponse)
 def onboarding_sample(request: Request, shuffle: bool = False):
-    """Stories to rate, picked by the dials beside them; "Show others" shuffles instead."""
+    """Stories to rate, picked by what your ratings taught so far; "Show others" shuffles instead."""
     selected = [i for i in settings.enabled_sources() if i in BY_ID]
     events = store().events()
     return templates.TemplateResponse(
@@ -432,7 +438,6 @@ def onboarding_sample(request: Request, shuffle: bool = False):
         "onboarding_sample.html",
         {
             "articles": sample(sample_pool(shuffle), SAMPLE_SIZE),
-            "weights": settings.weights(),
             "pending": store().pending(selected),
             "liked": len(switched_on(events, "seed", "unseed")),
             "disliked": len(switched_on(events, "hide", "unhide")),
@@ -451,23 +456,32 @@ def onboarding_sample_next(request: Request, shown: str = "", sources: str = "")
     return templates.TemplateResponse(request, "_sample_row.html", {"a": fresh[0]})
 
 
-@app.get("/onboarding/sample/rows", response_class=HTMLResponse)
-def onboarding_sample_rows(request: Request):
-    """A whole new set to rate, after you moved a dial."""
-    rows = sample(sample_pool(), SAMPLE_SIZE)
-    return HTMLResponse("".join(templates.get_template("_sample_row.html").render(a=a) for a in rows))
+def top_stories() -> list[Article]:
+    """What All would show first, by Recommended, with the weights as they are now."""
+    selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
+    return feed(selected, {**settings.ALL_TAB, "sort": "recommended"})[:TOP_SIZE]
 
 
-@app.get("/onboarding/weights")
-def onboarding_weights():
-    return JSONResponse(settings.weights())
+@app.get("/onboarding/tune", response_class=HTMLResponse)
+def onboarding_tune(request: Request):
+    return templates.TemplateResponse(
+        request, "onboarding_tune.html", {"articles": top_stories(), "weights": settings.weights()}
+    )
+
+
+@app.get("/onboarding/tune/top", response_class=HTMLResponse)
+def onboarding_tune_top(request: Request):
+    """The top stories again, after you moved a dial."""
+    rows = templates.get_template("_sample_row.html")
+    return HTMLResponse("".join(rows.render(a=a, preview=True) for a in top_stories()))
 
 
 @app.post("/onboarding/weights")
 def onboarding_weights_submit(
     name: Annotated[Literal["like", "hidden", "fresh", "popular", "random"], Form()], value: Annotated[float, Form()]
 ):
-    """A dial you moved while onboarding learns: it keeps learning, but stays this far from what's learned."""
+    """A dial you moved while tuning. Rate more stories afterwards (Back) and it keeps learning, but stays this
+    far from what's learned."""
     learned = learned_weights()
     if name in learned:
         settings.set_weight_nudges(settings.weight_nudges() | {name: value - learned[name]})

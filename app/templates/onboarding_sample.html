@@ -3,13 +3,12 @@
 {#- With JS, app.js looks again ([data-refresh]) without a full reload. #}
 {% block head %}{% if pending and not articles %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock %}
 {% block page_class %}wide{% endblock %}
-{% from "_dials.html" import dials %}
 {% block content %}
 <header class="masthead">
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>Anything catch your eye?</h1>
-    <p class="date">Step 5 of 6 · Tick what you'd read, cross what you wouldn't. The dials learn as you go.</p>
+    <p class="date">Step 5 of 7 · Tick what you'd read, cross what you wouldn't. Each one teaches the ranking a little.</p>
   </div>
 </header>
 
@@ -20,8 +19,6 @@
   </ul>
   <div class="learning-side">
     <canvas class="learning" data-lorenz data-lorenz-paced aria-hidden="true"></canvas>
-    {#- What your ratings teach, live; move one yourself and it keeps learning from where you put it. #}
-    <div data-learned>{{ dials(weights, compact=True) }}</div>
   </div>
 </div>
 <div class="footer-bar">
@@ -31,7 +28,7 @@
   </span>
   <span class="footer-actions">
     <a class="quiet-btn" href="/onboarding/sources">Back</a>
-    <a class="primary-btn" href="/onboarding/tabs">Next</a>
+    <a class="primary-btn" href="/onboarding/tune">Next</a>
   </span>
 </div>
 {% else %}
@@ -40,7 +37,7 @@
   <span></span>
   <span class="footer-actions">
     <a class="quiet-btn" href="/onboarding/sources">Back</a>
-    {% if pending %}<a class="quiet-btn" href="/onboarding/tabs">Skip</a>{% else %}<a class="primary-btn" href="/onboarding/tabs">Next</a>{% endif %}
+    {% if pending %}<a class="quiet-btn" href="/onboarding/tune">Skip</a>{% else %}<a class="primary-btn" href="/onboarding/tune">Next</a>{% endif %}
   </span>
 </div>
 {% endif %}

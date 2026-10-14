@@ -1,10 +1,9 @@
-{#- The ranking weights as dials: in full in Settings; compact (a word each, no numbers) beside the stories
-    onboarding learns them from. #}
-{% macro dials(weights, compact=False) %}
-<ul class="sources{% if compact %} dials-compact{% endif %}">
-  {% for key, label, short in [("like", "Like what you open", "like"), ("hidden", "Unlike what you hide", "unlike"), ("fresh", "Fresh", "fresh"), ("popular", "Popular", "popular"), ("random", "Surprise", "surprise")] %}
+{#- The ranking weights as dials: in Settings, and in onboarding beside the top stories they pick. #}
+{% macro dials(weights) %}
+<ul class="sources">
+  {% for key, label in [("like", "Like what you open"), ("hidden", "Unlike what you hide"), ("fresh", "Fresh"), ("popular", "Popular"), ("random", "Surprise")] %}
   <li class="weight" {% if not weights[key] %}data-off{% endif %}>
-    <label for="weight-{{ key }}">{{ short if compact else label }}</label>
+    <label for="weight-{{ key }}">{{ label }}</label>
     <input type="range" class="dial" id="weight-{{ key }}" name="{{ key }}" min="0" max="1" step="any" value="{{ weights[key] }}" style="--v: {{ weights[key] }}">
     <output for="weight-{{ key }}">{{ "%.1f" | format(weights[key]) }}</output>
   </li>

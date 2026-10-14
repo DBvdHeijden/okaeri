@@ -41,8 +41,7 @@
 
   // Ranking dials: a click glides the needle to the pointer, a drag follows it, and letting go settles
   // on the nearest 0.1. The browser jumps the value straight to the pointer, so while a glide runs we
-  // put the value back and ease towards where it wanted to go. Setting one yourself sends "dial-set";
-  // glideTo() moves one from outside (onboarding, as it learns) without it.
+  // put the value back and ease towards where it wanted to go. Setting one yourself sends "dial-set".
   const tenth = (v) => Math.min(Math.max(Math.round(v * 10) / 10, 0), 1);
   const easeOut = (t) => 1 - (1 - t) ** 3;
   function initDials() {
@@ -75,11 +74,6 @@
         target = tenth(target);
         glide(160);
         set();
-      };
-      dial.glideTo = (v) => {
-        if (pressed) return;  // you're holding it
-        target = v;
-        glide(700);  // slower than your own moves: this is the dial learning
       };
       dial.addEventListener("pointerdown", () => { pressed = true; });
       dial.addEventListener("input", () => {
@@ -132,22 +126,23 @@
     else row.remove();
   });
 
-  // Onboarding sample step, the dials beside the stories: after a rating they glide to what was learned;
-  // move one yourself and it keeps learning from there, and a new set of stories is picked by it.
-  const learnedDials = async () => {
-    const learned = document.querySelector("[data-learned]");
-    if (!learned) return;
-    const weights = await (await fetch("/onboarding/weights")).json();
-    for (const dial of learned.querySelectorAll(".dial")) dial.glideTo(weights[dial.name]);
-  };
+  // Onboarding, tuning the ranking: each dial you turn is saved and the top stories come again. Stories that stay
+  // glide to their new place, new ones fade in. Saves go one at a time, so two quick turns can't undo each other;
+  // only the newest top stories are shown.
+  let saving = Promise.resolve(), tuning = 0;
   document.addEventListener("dial-set", async (e) => {
-    if (!e.target.closest("[data-learned]")) return;
-    await fetch("/onboarding/weights", { method: "POST", body: new URLSearchParams({ name: e.target.name, value: e.detail }) });
-    const res = await fetch("/onboarding/sample/rows");
-    const list = document.querySelector(".rate-list");
-    if (!res.ok || !list) return;
-    list.innerHTML = await res.text();
-    if (!REDUCED) for (const row of list.children) row.classList.add("entering");
+    if (!e.target.closest("[data-tune]")) return;
+    const token = ++tuning;
+    const body = new URLSearchParams({ name: e.target.name, value: e.detail });
+    await (saving = saving.then(() => fetch("/onboarding/weights", { method: "POST", body })));
+    const res = await fetch("/onboarding/tune/top");
+    const list = document.querySelector("[data-top]");
+    if (!res.ok || !list || token !== tuning) return;
+    const template = document.createElement("template");
+    template.innerHTML = await res.text();
+    const kept = new Map([...list.children].map((row) => [row.dataset.id, row]));
+    const rows = [...template.content.children].map((row) => kept.get(row.dataset.id) || row);
+    reflow(rows, () => list.replaceChildren(...rows));
   });
 
   // Onboarding sample step: a rating saves in the background, the tally counts up, and the story makes way
@@ -172,7 +167,6 @@
       sources: rows.filter((r) => r !== row).map((r) => r.dataset.source).join(","),
     });
     await saved;
-    learnedDials();
     const res = await fetch(`/onboarding/sample/next?${query}`).catch(() => null);
     if (res?.status !== 200) return row.remove();  // nothing left to show
     const template = document.createElement("template");

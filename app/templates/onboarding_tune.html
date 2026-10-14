@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Ranking · okaeri{% endblock %}
+{% block page_class %}wide{% endblock %}
+{% from "_dials.html" import dials %}
+{% block content %}
+<header class="masthead">
+  <div>
+    <p class="kicker" lang="ja">はじめまして</p>
+    <h1>What should come first?</h1>
+    <p class="date">Step 6 of 7 · Your ratings set these dials. Turn any of them and watch the top of your feed change.</p>
+  </div>
+</header>
+
+<div class="rate-layout">
+  {% if articles %}
+  {% set preview = true %}
+  <ol class="sources rate-list" data-top>
+    {% for a in articles %}{% include "_sample_row.html" %}{% endfor %}
+  </ol>
+  {% else %}
+  <p class="empty">No stories yet to show. The dials still work; you'll see them at work on your feed.</p>
+  {% endif %}
+  {#- Each turn is saved at once (POST /onboarding/weights) and the top stories come again, so Next needs no form. #}
+  <div data-tune>{{ dials(weights) }}</div>
+</div>
+<div class="footer-bar">
+  <span></span>
+  <span class="footer-actions">
+    <a class="quiet-btn" href="/onboarding/sample">Back</a>
+    <a class="primary-btn" href="/onboarding/tabs">Next</a>
+  </span>
+</div>
+{% endblock %}

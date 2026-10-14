@@ -70,7 +70,7 @@ OKAERI_PORT=12363 uv run main.py   # another port; works for the service command
 uv run pytest
 ```
 
-On first run you're sent to onboarding: pick fields and media, then sources, then tick a few sample stories you'd read (saved as seed events for ranking). Nothing is fetched until you pick sources.
+On first run you're sent to onboarding: pick fields and media, then sources, then tick a few sample stories you'd read (saved as seed events for ranking), then tune the ranking dials while the top 5 stories change with them, then set up tabs. Nothing is fetched until you pick sources.
 
 Embedding runs in a short-lived child process, `python -m app.embed`, so the server never holds the model in memory: the 270M text model, 8-bit ONNX from [onnx-community/embeddinggemma-2-ONNX](https://huggingface.co/onnx-community/embeddinggemma-2-ONNX), pinned to a revision, vectors cut to 256 dims and stored in SQLite. Try them out:
 
