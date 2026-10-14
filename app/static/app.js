@@ -276,27 +276,49 @@
     else if (e.target.closest("[data-next]")) paging?.move(1);
   });
 
-  // Switching tabs or views (Latest / Recommended, Opened / Liked / Hidden) goes like turning a page: the rows
-  // leave first, and the new page's rows load in as usual. Ctrl/Cmd-click etc. still open a new tab.
+  // Onboarding's stories (steps 5 and 6) turn like the feed's pages when you switch fields: they leave quickly, and
+  // the next ones come in top to bottom.
+  const leaveRows = async () => {
+    if (paging) return paging.leave();
+    const rows = document.querySelectorAll(".rate-list > .rate-row");
+    if (REDUCED || !rows.length) return;
+    for (const row of rows) {
+      row.classList.remove("entering");
+      row.classList.add("leaving");
+    }
+    await new Promise((r) => setTimeout(r, LEAVE_MS));
+  };
+  function initRows() {
+    if (REDUCED) return;
+    document.querySelectorAll(".rate-list > .rate-row").forEach((row, n) => {
+      row.style.setProperty("--i", n);
+      row.classList.add("entering");
+      // Off again once it's in: step 6's dials put these rows back in a new order, which would replay it.
+      row.addEventListener("animationend", () => row.classList.remove("entering"), { once: true });
+    });
+  }
+
+  // Switching tabs or views (Latest / Recommended, Opened / Liked / Hidden), or onboarding's fields, goes like turning
+  // a page: the rows leave first, and the new page's rows load in as usual. Ctrl/Cmd-click etc. still open a new tab.
   document.addEventListener("click", async (e) => {
     const link = e.target.closest(".tabs a, .view-switch a");
     if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    await paging?.leave();
+    await leaveRows();
     Turbo.visit(link.href);
   });
   document.addEventListener("submit", async (e) => {
     const form = e.target;
     if (!form.matches(".view-switch") || "left" in form.dataset) return;  // the second time round, it goes
     e.preventDefault();
-    await paging?.leave();
+    await leaveRows();
     form.dataset.left = "";
     form.requestSubmit(e.submitter);
   });
   // The back button brings a page back as it was left, rows faded out: from Turbo's cache (init runs then), or the
   // browser's. Not on turbo:before-cache: that runs on the page still on screen, and the rows would come back.
   const unleave = () => {
-    for (const row of document.querySelectorAll(".row.leaving")) row.classList.remove("leaving");
+    for (const row of document.querySelectorAll(".row.leaving, .rate-row.leaving")) row.classList.remove("leaving");
     for (const form of document.querySelectorAll(".view-switch[data-left]")) delete form.dataset.left;
   };
   addEventListener("pageshow", (e) => { if (e.persisted) unleave(); });
@@ -511,6 +533,7 @@
     initDials();
     initProgress();
     initPaging();
+    initRows();
     initRefresh();
     initTabsEditor();
     initOnboardingForm();
