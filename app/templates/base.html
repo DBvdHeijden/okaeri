@@ -4,17 +4,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {#- Tells the browser the page's background before style.css arrives, so a dark page doesn't blink white in between. #}
+  <meta name="color-scheme" content="{{ theme if theme in ('light', 'dark') else 'light dark' }}">
   <title>{% block title %}okaeri{% endblock %}</title>
-  <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
-  <link rel="icon" href="{{ url_for('static', path='favicon-32.png') }}" sizes="32x32" type="image/png">
-  <link rel="apple-touch-icon" href="{{ url_for('static', path='apple-touch-icon.png') }}">
+  <link rel="icon" href="{{ static('favicon.svg') }}" type="image/svg+xml">
+  <link rel="icon" href="{{ static('favicon-32.png') }}" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="{{ static('apple-touch-icon.png') }}">
   {% block head %}{% endblock %}
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@500&display=swap">
-  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
-  <script src="{{ url_for('static', path='app.js') }}" defer></script>
-  {% block scripts %}{% endblock %}
+  {#- Fetched alongside the stylesheet instead of after it, so the text is drawn in its own font the first time.
+      Unversioned, to match the URLs in style.css. #}
+  {%- for font in ("plex-sans", "plex-mono-400", "plex-mono-500", "plex-sans-jp-500") %}
+  <link rel="preload" href="/static/fonts/{{ font }}.woff2" as="font" type="font/woff2" crossorigin>
+  {%- endfor %}
+  {#- Turbo fetches each next page and swaps it into this one, so the window is never blank between pages (Firefox
+      flashes one between whole page loads). "reload": a page that comes with a changed file is loaded in full. #}
+  <meta name="view-transition" content="same-origin">
+  <meta name="turbo-cache-control" content="no-preview">
+  <link rel="stylesheet" href="{{ static('style.css') }}" data-turbo-track="reload">
+  {#- An inline script can't run before the stylesheet above has loaded, and the page below waits for it, so nothing is
+      drawn unstyled. Firefox otherwise may paint before style.css is in. #}
+  <script>0</script>
+  <script src="{{ static('turbo.js') }}" defer data-turbo-track="reload"></script>
+  <script src="{{ static('app.js') }}" defer data-turbo-track="reload"></script>
+  <script src="{{ static('lorenz.js') }}" defer data-turbo-track="reload"></script>
 </head>
 <body>
   {% block aside %}{% endblock %}

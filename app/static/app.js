@@ -7,35 +7,36 @@
     root.dataset.theme ||
     (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 
-  for (const btn of document.querySelectorAll("[data-theme-toggle]")) {
-    btn.addEventListener("click", () => {
-      const next = currentTheme() === "dark" ? "light" : "dark";
-      const apply = () => {
-        root.dataset.theme = next;
-        document.cookie = `theme=${next}; path=/; max-age=31536000; samesite=lax`;
-      };
-      const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (!document.startViewTransition || reduced) return apply();
-      // Dark drops down over the page; light pulls it back up.
-      root.dataset.themeTransition = next === "dark" ? "down" : "up";
-      document.startViewTransition(apply).finished.finally(() => {
-        delete root.dataset.themeTransition;
-      });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("[data-theme-toggle]")) return;
+    const next = currentTheme() === "dark" ? "light" : "dark";
+    const apply = () => {
+      root.dataset.theme = next;
+      document.cookie = `theme=${next}; path=/; max-age=31536000; samesite=lax`;
+    };
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!document.startViewTransition || reduced) return apply();
+    // Dark drops down over the page; light pulls it back up.
+    root.dataset.themeTransition = next === "dark" ? "down" : "up";
+    document.startViewTransition(apply).finished.finally(() => {
+      delete root.dataset.themeTransition;
     });
-  }
+  });
 
   // Ask before doing something that can't be undone, in the line itself: the link becomes "Sure? Yes · No".
   // Without JS the link just does it.
-  for (const box of document.querySelectorAll("[data-confirm]")) {
-    const ask = box.querySelector("[data-ask]"), sure = box.querySelector("[data-sure]");
-    const asking = (on) => {
-      ask.hidden = on;
-      sure.hidden = !on;
-      (on ? sure.querySelector("[type=submit]") : ask).focus();
-    };
-    ask.addEventListener("click", (e) => { e.preventDefault(); asking(true); });
-    box.querySelector("[data-cancel]").addEventListener("click", () => asking(false));
-    sure.addEventListener("keydown", (e) => { if (e.key === "Escape") asking(false); });
+  function initConfirms() {
+    for (const box of document.querySelectorAll("[data-confirm]")) {
+      const ask = box.querySelector("[data-ask]"), sure = box.querySelector("[data-sure]");
+      const asking = (on) => {
+        ask.hidden = on;
+        sure.hidden = !on;
+        (on ? sure.querySelector("[type=submit]") : ask).focus();
+      };
+      ask.addEventListener("click", (e) => { e.preventDefault(); asking(true); });
+      box.querySelector("[data-cancel]").addEventListener("click", () => asking(false));
+      sure.addEventListener("keydown", (e) => { if (e.key === "Escape") asking(false); });
+    }
   }
 
   // Ranking dials: a click glides the needle to the pointer, a drag follows it, and letting go settles
@@ -44,65 +45,69 @@
   // glideTo() moves one from outside (onboarding, as it learns) without it.
   const tenth = (v) => Math.min(Math.max(Math.round(v * 10) / 10, 0), 1);
   const easeOut = (t) => 1 - (1 - t) ** 3;
-  for (const dial of document.querySelectorAll(".dial")) {
-    let shown = +dial.value, target = shown, tween = 0, gliding = false, pressed = false;
-    const show = (v) => {
-      shown = v;
-      dial.value = v;
-      dial.style.setProperty("--v", v);
-      dial.nextElementSibling.value = tenth(v).toFixed(1);
-      dial.parentElement.toggleAttribute("data-off", tenth(v) === 0);
-    };
-    // Eases from where the needle is to `target`, which may keep moving while it runs.
-    const glide = (ms) => {
-      const id = ++tween, from = shown, start = performance.now();
-      gliding = true;
-      const frame = (now) => {
-        if (id !== tween) return;  // a newer glide took over
-        const t = REDUCED ? 1 : Math.min((now - start) / ms, 1);
-        show(t < 1 ? from + (target - from) * easeOut(t) : target);
-        if (t < 1) requestAnimationFrame(frame);
-        else gliding = false;
+  function initDials() {
+    for (const dial of document.querySelectorAll(".dial")) {
+      let shown = +dial.value, target = shown, tween = 0, gliding = false, pressed = false;
+      const show = (v) => {
+        shown = v;
+        dial.value = v;
+        dial.style.setProperty("--v", v);
+        dial.nextElementSibling.value = tenth(v).toFixed(1);
+        dial.parentElement.toggleAttribute("data-off", tenth(v) === 0);
       };
-      requestAnimationFrame(frame);
-    };
-    const set = () => dial.dispatchEvent(new CustomEvent("dial-set", { bubbles: true, detail: target }));
-    const settle = () => {
-      if (target === tenth(target) && !pressed) return;  // pointerup and change both land here
-      pressed = false;
-      target = tenth(target);
-      glide(160);
-      set();
-    };
-    dial.glideTo = (v) => {
-      if (pressed) return;  // you're holding it
-      target = v;
-      glide(700);  // slower than your own moves: this is the dial learning
-    };
-    dial.addEventListener("pointerdown", () => { pressed = true; });
-    dial.addEventListener("input", () => {
-      target = +dial.value;
-      if (!pressed && !gliding) return show(target);
-      dial.value = shown;
-      if (!gliding) glide(140);
-    });
-    // pointerup too: a quick click can end before the needle moves, and then there's no change event.
-    dial.addEventListener("pointerup", settle);
-    dial.addEventListener("change", settle);
-    dial.addEventListener("keydown", (e) => {
-      const dir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
-      if (!dir) return;
-      e.preventDefault();
-      target = tenth(tenth(target) + dir / 10);
-      glide(160);
-      set();
-    });
+      // Eases from where the needle is to `target`, which may keep moving while it runs.
+      const glide = (ms) => {
+        const id = ++tween, from = shown, start = performance.now();
+        gliding = true;
+        const frame = (now) => {
+          if (id !== tween) return;  // a newer glide took over
+          const t = REDUCED ? 1 : Math.min((now - start) / ms, 1);
+          show(t < 1 ? from + (target - from) * easeOut(t) : target);
+          if (t < 1) requestAnimationFrame(frame);
+          else gliding = false;
+        };
+        requestAnimationFrame(frame);
+      };
+      const set = () => dial.dispatchEvent(new CustomEvent("dial-set", { bubbles: true, detail: target }));
+      const settle = () => {
+        if (target === tenth(target) && !pressed) return;  // pointerup and change both land here
+        pressed = false;
+        target = tenth(target);
+        glide(160);
+        set();
+      };
+      dial.glideTo = (v) => {
+        if (pressed) return;  // you're holding it
+        target = v;
+        glide(700);  // slower than your own moves: this is the dial learning
+      };
+      dial.addEventListener("pointerdown", () => { pressed = true; });
+      dial.addEventListener("input", () => {
+        target = +dial.value;
+        if (!pressed && !gliding) return show(target);
+        dial.value = shown;
+        if (!gliding) glide(140);
+      });
+      // pointerup too: a quick click can end before the needle moves, and then there's no change event.
+      dial.addEventListener("pointerup", settle);
+      dial.addEventListener("change", settle);
+      dial.addEventListener("keydown", (e) => {
+        const dir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+        if (!dir) return;
+        e.preventDefault();
+        target = tenth(tenth(target) + dir / 10);
+        glide(160);
+        set();
+      });
+    }
   }
 
   // Background work (model download, indexing) in Settings: refresh the text until it's done.
-  const progress = document.querySelector("[data-progress]");
-  if (progress?.textContent) {
+  function initProgress() {
+    const progress = document.querySelector("[data-progress]");
+    if (!progress?.textContent) return;
     const poll = setInterval(async () => {
+      if (!progress.isConnected) return clearInterval(poll);  // you went to another page
       const text = await (await fetch("/progress")).text();
       progress.textContent = text;
       if (!text) clearInterval(poll);
@@ -128,13 +133,14 @@
 
   // Onboarding sample step, the dials beside the stories: after a rating they glide to what was learned;
   // move one yourself and it keeps learning from there, and a new set of stories is picked by it.
-  const learned = document.querySelector("[data-learned]");
   const learnedDials = async () => {
+    const learned = document.querySelector("[data-learned]");
     if (!learned) return;
     const weights = await (await fetch("/onboarding/weights")).json();
     for (const dial of learned.querySelectorAll(".dial")) dial.glideTo(weights[dial.name]);
   };
-  learned?.addEventListener("dial-set", async (e) => {
+  document.addEventListener("dial-set", async (e) => {
+    if (!e.target.closest("[data-learned]")) return;
     await fetch("/onboarding/weights", { method: "POST", body: new URLSearchParams({ name: e.target.name, value: e.detail }) });
     const res = await fetch("/onboarding/sample/rows");
     const list = document.querySelector(".rate-list");
@@ -181,6 +187,7 @@
   const LEAVE_MS = 120;
 
   function initPaging() {
+    paging = null;
     const feed = document.querySelector(".feed");
     const pager = document.querySelector("[data-pager]");
     if (!feed || !pager) return;
@@ -272,7 +279,7 @@
     if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     await paging?.leave();
-    location.href = link.href;
+    Turbo.visit(link.href);
   });
   document.addEventListener("submit", async (e) => {
     const form = e.target;
@@ -282,12 +289,13 @@
     form.dataset.left = "";
     form.requestSubmit(e.submitter);
   });
-  // Coming back with the browser's back button can restore the page as it was left: rows faded out.
-  addEventListener("pageshow", (e) => {
-    if (!e.persisted) return;
+  // The back button brings a page back as it was left, rows faded out: from Turbo's cache, or the browser's.
+  const unleave = () => {
     for (const row of document.querySelectorAll(".row.leaving")) row.classList.remove("leaving");
     for (const form of document.querySelectorAll(".view-switch[data-left]")) delete form.dataset.left;
-  });
+  };
+  document.addEventListener("turbo:before-cache", unleave);
+  addEventListener("pageshow", (e) => { if (e.persisted) unleave(); });
   document.addEventListener("keydown", (e) => {
     if (!paging || paging.pager.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.target.closest("input, textarea, select, [contenteditable]")) return;
@@ -299,14 +307,21 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => paging?.paginate(), 100);
   });
-  initPaging();
   // Web fonts change row heights; re-fit once they're in.
   document.fonts?.ready.then(() => paging?.paginate());
 
+  // While the first stories are being fetched, look again every few seconds.
+  function initRefresh() {
+    const waiting = document.querySelector("[data-refresh]");
+    if (!waiting) return;
+    setTimeout(() => { if (waiting.isConnected) Turbo.visit(location.href, { action: "replace" }); }, 3000);
+  }
+
   // Tabs (Settings and the onboarding tabs step). All and History can only be hidden; custom tabs can also be edited.
   // On save the rows become the "tabs" JSON in settings.json.
-  const tabsEditor = document.querySelector("[data-tabs]");
-  if (tabsEditor) {
+  function initTabsEditor() {
+    const tabsEditor = document.querySelector("[data-tabs]");
+    if (!tabsEditor) return;
     const list = tabsEditor.querySelector("[data-tab-list]");
     const addBtn = tabsEditor.querySelector("[data-add-tab]");
     const rows = () => [...list.querySelectorAll("[data-tab-row]")];
@@ -390,8 +405,9 @@
   }
 
   // Onboarding and settings
-  const form = document.querySelector("[data-onboarding]");
-  if (form) {
+  function initOnboardingForm() {
+    const form = document.querySelector("[data-onboarding]");
+    if (!form) return;
     const count = form.querySelector("[data-selected-count]");
     const checks = form.querySelectorAll(".check");
     const selectAll = form.querySelector("[data-select-all]");
@@ -445,4 +461,17 @@
       });
     }
   }
+
+  // Set up what's on the page: now, and each time Turbo swaps in another (it doesn't run this script again).
+  const init = () => {
+    initConfirms();
+    initDials();
+    initProgress();
+    initPaging();
+    initRefresh();
+    initTabsEditor();
+    initOnboardingForm();
+  };
+  init();
+  document.addEventListener("turbo:render", init);
 })();

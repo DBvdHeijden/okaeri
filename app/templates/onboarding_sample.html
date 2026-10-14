@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Sample · okaeri{% endblock %}
-{% block head %}{% if pending and not articles %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='lorenz.js') }}" defer></script>{% endblock %}
+{#- With JS, app.js looks again ([data-refresh]) without a full reload. #}
+{% block head %}{% if pending and not articles %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock %}
 {% block page_class %}wide{% endblock %}
 {% from "_dials.html" import dials %}
 {% block content %}
@@ -35,7 +35,7 @@
   </span>
 </div>
 {% else %}
-<p class="empty">{% if pending %}Fetching the first stories from your sources, one moment…{% else %}No stories yet. You can always come back to this later.{% endif %}</p>
+<p class="empty"{% if pending %} data-refresh{% endif %}>{% if pending %}Fetching the first stories from your sources, one moment…{% else %}No stories yet. You can always come back to this later.{% endif %}</p>
 <div class="footer-bar">
   <span></span>
   <span class="footer-actions">

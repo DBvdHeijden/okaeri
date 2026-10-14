@@ -1,3 +1,10 @@
+/* Served from here rather than Google Fonts: no wait on another site before the page can draw.
+   The Japanese file holds only the glyphs of the kickers (おかえり, はじめまして, 設定); add new ones to it. */
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400 600; font-display: swap; src: url(fonts/plex-sans.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-display: swap; src: url(fonts/plex-mono-400.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 500; font-display: swap; src: url(fonts/plex-mono-500.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans JP"; font-weight: 500; font-display: swap; src: url(fonts/plex-sans-jp-500.woff2) format("woff2"); }
+
 :root {
   --bg: #FBFBFA;
   --text: #22221F;
@@ -43,7 +50,8 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+/* Stable: pages that scroll and pages that don't keep the column in the same place. */
+html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; }
 
 body {
   margin: 0;
@@ -62,6 +70,17 @@ a { color: inherit; }
 }
 
 button { font: inherit; color: inherit; }
+
+/* Hover states ease in rather than snap. */
+:is(.icon-btn, .tabs a, .view-switch :is(a, button), .quiet-btn, .chip-btn, .link-btn, .title, .meta a, .date-link) {
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+/* Page changes (Turbo, see base.html): a quick crossfade. The theme switch has its own, further down. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 160ms; }
+
+/* Shown by Turbo when a page takes a moment to come. */
+.turbo-progress-bar { height: 2px; background: var(--accent); }
 
 .visually-hidden {
   position: absolute;
@@ -123,8 +142,8 @@ button { font: inherit; color: inherit; }
   view-transition-name: lorenz;
 }
 
-::view-transition-old(lorenz) { display: none; }
-::view-transition-new(lorenz) { animation: none; }
+:root[data-theme-transition]::view-transition-old(lorenz) { display: none; }
+:root[data-theme-transition]::view-transition-new(lorenz) { animation: none; }
 
 @media (min-width: 1200px) {
   .lorenz { display: block; }
@@ -143,6 +162,7 @@ button { font: inherit; color: inherit; }
 
 h1 {
   margin: 0;
+  text-wrap: balance;
   font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -242,6 +262,7 @@ h1 {
   line-height: 1.35;
   text-decoration: none;
   overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 .title:hover { color: var(--accent); }
 .title:visited { color: var(--muted); }
@@ -265,7 +286,7 @@ h1 {
   align-self: center;
   margin: -6px -8px -6px 0;
   opacity: 0;
-  transition: opacity 120ms ease;
+  transition: opacity 120ms ease, background-color 140ms ease, color 140ms ease;
 }
 .row:hover .hide-btn,
 .row:focus-within .hide-btn { opacity: 1; }
@@ -413,6 +434,9 @@ h1 {
   transition: transform 160ms ease;
 }
 .fold[open] > summary::after { transform: rotate(225deg); margin-bottom: -3px; }
+/* What a fold opens fades in, just under where it ends up. */
+.fold[open] > :not(summary) { animation: fold-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+@keyframes fold-in { from { opacity: 0; transform: translateY(-4px); } }
 .fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
 .fold-label { font-weight: 500; }
@@ -612,7 +636,9 @@ h1 {
   font-weight: 500;
   cursor: pointer;
 }
+.primary-btn { transition: opacity 140ms ease, transform 100ms ease; }
 .primary-btn:hover { opacity: 0.88; }
+.primary-btn:active { transform: scale(0.98); }
 
 /* A secondary action next to .primary-btn: quiet like the tabs until hovered. */
 .quiet-btn {
@@ -678,5 +704,6 @@ h1 {
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
-  .row.entering, .row.leaving { animation: none; }
+  .row.entering, .row.leaving, .fold[open] > :not(summary) { animation: none; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }

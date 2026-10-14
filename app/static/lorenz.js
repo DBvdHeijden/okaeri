@@ -2,9 +2,13 @@
 // Decorative only: one canvas, a few hundred strokes per frame, paused when hidden.
 // On the homepage the particle runs on its own. With data-lorenz-paced (onboarding step 4) it only moves when
 // you rate a story: each like or dislike in the tally ([data-tally]) carries it about one loop further.
-(() => {
-  const canvas = document.querySelector("[data-lorenz]");
-  if (!canvas) return;
+// Turbo swaps pages without running this script again, so it starts on each page's canvas (see the bottom) and
+// returns a function that stops it, keeping its state for next time.
+function startLorenz(canvas) {
+  const stops = [];
+  const stop = () => stops.forEach((f) => f());
+  // Observers and listeners here go when it stops.
+  const watch = (observer, target, options) => { observer.observe(target, options); stops.push(() => observer.disconnect()); };
   const ctx = canvas.getContext("2d");
   const tally = canvas.hasAttribute("data-lorenz-paced") && document.querySelector("[data-tally]");
 
@@ -90,6 +94,7 @@
     }
   }
   addEventListener("pagehide", save);
+  stops.push(save, () => removeEventListener("pagehide", save));
 
   // Otherwise skip the transient so the particle starts on the attractor (paced: with one loop drawn as a hint).
   if (!restore()) {
@@ -101,10 +106,10 @@
     owed += (ratings() - seen) * PER_RATING;
     seen = ratings();
     for (; owed > 0; owed--) { step(); push(); }
-    new MutationObserver(() => {
+    watch(new MutationObserver(() => {
       owed += (ratings() - seen) * PER_RATING;
       seen = ratings();
-    }).observe(tally, { attributes: true, attributeFilter: ["data-liked", "data-disliked"] });
+    }), tally, { attributes: true, attributeFilter: ["data-liked", "data-disliked"] });
   }
 
   let trailColor = "";
@@ -113,8 +118,10 @@
     trailColor = css.getPropertyValue("--muted").trim();
   }
   readColors();
-  new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readColors);
+  watch(new MutationObserver(readColors), document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  const scheme = matchMedia("(prefers-color-scheme: dark)");
+  scheme.addEventListener("change", readColors);
+  stops.push(() => scheme.removeEventListener("change", readColors));
 
   let w = 0, h = 0, scale = 1, cx = 0, cy = 0;
   function resize() {
@@ -128,7 +135,7 @@
     scale = tally ? Math.min((w * 0.98) / 56, (h * 0.9) / 50) : Math.min((w * 0.8) / 56, (h * 0.55) / 50);
     cx = w / 2; cy = h / 2 + 25 * scale;
   }
-  new ResizeObserver(resize).observe(canvas);
+  watch(new ResizeObserver(resize), canvas);
   resize();
 
   // Scalar helpers (no per-point arrays) so drawing 10k points doesn't churn the GC,
@@ -180,11 +187,11 @@
   if (reduced) {
     // Static drawing, no animation: one full trail, or (paced) each rating's steps at once.
     if (!tally && count < TRAIL) for (let i = 0; i < TRAIL; i++) { step(); push(); }
-    if (tally) new MutationObserver(() => { for (; owed > 0; owed--) { step(); push(); } draw(); })
-      .observe(tally, { attributes: true, attributeFilter: ["data-liked", "data-disliked"] });
-    new ResizeObserver(draw).observe(canvas);
+    if (tally) watch(new MutationObserver(() => { for (; owed > 0; owed--) { step(); push(); } draw(); }),
+      tally, { attributes: true, attributeFilter: ["data-liked", "data-disliked"] });
+    watch(new ResizeObserver(draw), canvas);
     draw();
-    return;
+    return stop;
   }
 
   // Paced: one segment per frame, as long as the current speed, so the particle glides instead of jumping whole
@@ -211,7 +218,22 @@
       angle += SPIN;
       draw();
     }
-    requestAnimationFrame(frame);
+    raf = requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
-})();
+  let raf = requestAnimationFrame(frame);
+  stops.push(() => cancelAnimationFrame(raf));
+  return stop;
+}
+
+{
+  // The homepage's canvas is kept across tab switches (data-turbo-permanent): then it just carries on.
+  let running = null;
+  const start = () => {
+    const canvas = document.querySelector("[data-lorenz]");
+    if (canvas === running?.canvas) return;
+    running?.stop();
+    running = canvas && { canvas, stop: startLorenz(canvas) };
+  };
+  start();
+  document.addEventListener("turbo:render", start);
+}

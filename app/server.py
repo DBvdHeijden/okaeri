@@ -56,6 +56,25 @@ app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 
 
+def static(path: str) -> str:
+    # The version changes with the file, so browsers can keep it without asking (see cache_static).
+    return f"/static/{path}?v={int((HERE / 'static' / path).stat().st_mtime)}"
+
+
+templates.env.globals["static"] = static
+
+
+@app.middleware("http")
+async def cache_static(request: Request, call_next):
+    # Without this Firefox re-checks the stylesheet on many page switches; when the server is busy fetching,
+    # that wait outlasts its paint delay and it flashes an empty window. Fonts, linked from style.css without
+    # a version, are cached too: give a changed font a new file name.
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
+
 def same_origin(request: Request) -> bool:
     if site := request.headers.get("sec-fetch-site"):
         return site in ("same-origin", "none")
