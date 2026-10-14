@@ -12,7 +12,7 @@ client = TestClient(server.app)
 
 
 def titles(html: str) -> list[str]:
-    return re.findall(r'class="title" href="[^"]*" target="_blank" rel="noopener">([^<]+)<', html)
+    return re.findall(r'class="title" href="[^"]*"[^>]*>([^<]+)<', html)
 
 
 def newest_first():

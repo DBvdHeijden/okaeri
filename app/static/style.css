@@ -273,14 +273,25 @@ h1 {
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }
+/* A story title always takes two lines: a short one keeps the space, a long one ends in "…" (the whole title is its
+   tooltip). With the meta line kept to one, every story row is as tall as the next, so lists don't jump as stories
+   come and go, and step 6's dials stay put. */
+.title, .rate-row .source-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  height: 2lh;
+}
 .title:hover { color: var(--accent); }
 .title:visited { color: var(--muted); }
 
 /* Under a title: quieter than the muted text elsewhere, its parts split by a dash (one span each). */
 .meta {
   display: flex;
-  flex-wrap: wrap;
   column-gap: 0.4em;
+  white-space: nowrap;
+  overflow: hidden;
   margin: 1px 0 0;
   color: color-mix(in srgb, var(--muted) 75%, var(--bg));
   font-size: 12.5px;
@@ -547,6 +558,53 @@ h1 {
 .dial::-moz-range-thumb { width: 2px; height: 14px; border: 0; border-radius: 1px; background: var(--text); transition: height 120ms ease; }
 .dial:is(:hover, :active, :focus-visible)::-moz-range-thumb { height: 20px; }
 .dial:focus-visible { outline-offset: 4px; }
+
+/* Step 6: the dials on the left, the fields and the top stories they pick on the right. The dials' column is exactly
+   as tall as the list, so their top and bottom lines are the list's; story rows are all one height (see .title), so
+   it stays put as you switch fields. Stacked when narrow. */
+.tune-layout {
+  display: grid;
+  grid-template: "space fields" auto "dials stories" auto / auto minmax(0, 1fr);
+  gap: 0 48px;
+  margin-bottom: 40px;
+}
+.tune-layout > [data-tune] { grid-area: dials; display: flex; flex-direction: column; }
+.tune-layout > [data-tune] > .sources { flex: 1; border-bottom: 1px solid var(--line); }
+.tune-fields { grid-area: fields; }
+.tune-stories { grid-area: stories; }
+@media (max-width: 760px) {
+  .tune-layout { grid-template: "fields" "stories" "dials" / minmax(0, 1fr); gap: 24px; }
+}
+
+/* Mixer: one vertical dial per signal, side by side; its value on top, its name below. */
+.dials-vertical { display: flex; gap: 4px; min-height: 260px; }
+.dials-vertical li.weight {
+  display: grid;
+  grid-template: auto minmax(0, 1fr) auto / 56px;
+  justify-items: center;
+  gap: 10px;
+  padding: 14px 0 12px;
+  border-bottom: 0;
+}
+.dials-vertical output { grid-row: 1; text-align: center; }
+.dials-vertical .dial { grid-row: 2; }
+.dials-vertical label { grid-row: 3; font: 12px var(--mono); color: var(--muted); }
+.dials-vertical .dial {
+  writing-mode: vertical-lr;
+  direction: rtl;  /* 0 at the bottom */
+  width: 28px;
+  height: 100%;
+  --dial-track:
+    linear-gradient(var(--text), var(--text)) 50% calc(100% - 1px) / 1.5px calc(var(--v) * (100% - 2px)) no-repeat,
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--muted) 45%, transparent) 0 1px, transparent 1px calc((100% - 1px) / 10)) 50% 0.5px / 7px calc(100% - 1px) no-repeat,
+    linear-gradient(var(--line), var(--line)) 50% 0 / 1px 100% no-repeat;
+}
+.dials-vertical .dial::-webkit-slider-runnable-track { width: 28px; height: 100%; }
+.dials-vertical .dial::-moz-range-track { width: 28px; height: 100%; }
+.dials-vertical .dial::-webkit-slider-thumb { width: 14px; height: 2px; margin: 0 7px; transition: width 120ms ease, margin 120ms ease; }
+.dials-vertical .dial:is(:hover, :active, :focus-visible)::-webkit-slider-thumb { width: 20px; height: 2px; margin: 0 4px; }
+.dials-vertical .dial::-moz-range-thumb { width: 14px; height: 2px; transition: width 120ms ease; }
+.dials-vertical .dial:is(:hover, :active, :focus-visible)::-moz-range-thumb { width: 20px; height: 2px; }
 
 .weight-foot { margin: 8px 0 16px; text-align: right; font: 13px var(--mono); color: var(--muted); }
 

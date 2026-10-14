@@ -1,10 +1,11 @@
-{#- The ranking weights as dials: in Settings, and in onboarding beside the top stories they pick. #}
-{% macro dials(weights) %}
-<ul class="sources">
-  {% for key, label in [("like", "Like what you open"), ("hidden", "Unlike what you hide"), ("fresh", "Fresh"), ("popular", "Popular"), ("random", "Surprise")] %}
-  <li class="weight" {% if not weights[key] %}data-off{% endif %}>
-    <label for="weight-{{ key }}">{{ label }}</label>
-    <input type="range" class="dial" id="weight-{{ key }}" name="{{ key }}" min="0" max="1" step="any" value="{{ weights[key] }}" style="--v: {{ weights[key] }}">
+{#- The ranking weights as dials: in Settings, and in onboarding beside the top stories they pick. Vertical (onboarding):
+    side by side like a mixing desk, each with a short name (the full one as its tooltip). #}
+{% macro dials(weights, vertical=False) %}
+<ul class="sources{% if vertical %} dials-vertical{% endif %}">
+  {% for key, label, short in [("like", "Like what you open", "like"), ("hidden", "Unlike what you hide", "unlike"), ("fresh", "Fresh", "fresh"), ("popular", "Popular", "popular"), ("random", "Surprise", "surprise")] %}
+  <li class="weight" {% if not weights[key] %}data-off{% endif %}{% if vertical %} title="{{ label }}"{% endif %}>
+    <label for="weight-{{ key }}">{{ short if vertical else label }}</label>
+    <input type="range" class="dial" id="weight-{{ key }}" name="{{ key }}" min="0" max="1" step="any" value="{{ weights[key] }}"{% if vertical %} orient="vertical"{% endif %} style="--v: {{ weights[key] }}">
     <output for="weight-{{ key }}">{{ "%.1f" | format(weights[key]) }}</output>
   </li>
   {% endfor %}

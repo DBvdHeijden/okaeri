@@ -11,27 +11,26 @@
   </div>
 </header>
 
-{#- One set of dials for everything; a field only narrows the stories shown, so you can check each in turn. #}
-{% if fields %}
-<nav class="view-switch" aria-label="Field">
-  <a href="/onboarding/tune" {% if not field %}aria-current="page"{% endif %}>All</a>
-  {% for topic in fields %}
-  <a href="/onboarding/tune?field={{ topic }}" {% if topic == field %}aria-current="page"{% endif %}>{{ topic }}</a>
-  {% endfor %}
-</nav>
-{% endif %}
-
-<div class="rate-layout">
+<div class="tune-layout">
+  {#- Each turn is saved at once (POST /onboarding/weights) and the top stories come again, so Next needs no form. #}
+  <div data-tune>{{ dials(weights, vertical=True) }}</div>
+  {#- Over the stories, not the dials: there's one set of dials for everything, a field only narrows what you see. #}
+  {% if fields %}
+  <nav class="view-switch tune-fields" aria-label="Field">
+    <a href="/onboarding/tune" {% if not field %}aria-current="page"{% endif %}>All</a>
+    {% for topic in fields %}
+    <a href="/onboarding/tune?field={{ topic }}" {% if topic == field %}aria-current="page"{% endif %}>{{ topic }}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
   {% if articles %}
   {% set preview = true %}
-  <ol class="sources rate-list" data-top data-field="{{ field }}">
+  <ol class="sources rate-list tune-stories" data-top data-field="{{ field }}">
     {% for a in articles %}{% include "_sample_row.html" %}{% endfor %}
   </ol>
   {% else %}
-  <p class="empty">{% if field %}No {{ field }} stories yet to show. Pick another field above.{% else %}No stories yet to show. The dials still work; you'll see them at work on your feed.{% endif %}</p>
+  <p class="empty tune-stories">{% if field %}No {{ field }} stories yet to show. Pick another field above.{% else %}No stories yet to show. The dials still work; you'll see them at work on your feed.{% endif %}</p>
   {% endif %}
-  {#- Each turn is saved at once (POST /onboarding/weights) and the top stories come again, so Next needs no form. #}
-  <div data-tune>{{ dials(weights) }}</div>
 </div>
 <div class="footer-bar">
   <span></span>

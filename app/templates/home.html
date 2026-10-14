@@ -47,7 +47,7 @@
   <li class="row" id="item-{{ loop.index }}">
     <div class="row-body">
       <div class="row-text">
-        <a class="title" href="/r/{{ a.id }}" target="_blank" rel="noopener">{{ a.title }}</a>
+        <a class="title" href="/r/{{ a.id }}" target="_blank" rel="noopener" title="{{ a.title }}">{{ a.title }}</a>
         {%- set thread = a.discussion_url if a.discussion_url and a.discussion_url != a.url else none %}
         {#- Without a comment count to link, the source / "also on" text links to the thread instead. #}
         {%- set link_names = thread and a.comments is none %}
