@@ -120,13 +120,14 @@
     fetch(form.action, { method: "POST", body, redirect: "manual" })
       .then((r) => { if (!r.ok && r.type !== "opaqueredirect") revert(); }, revert);
 
-  // Hide: the story goes at once; History › Hidden brings it back. If the save fails, reload to show
-  // the feed as it really is.
-  document.addEventListener("submit", (e) => {
+  // Hide: the story fades out and the ones below move up into its place; History › Hidden brings it back.
+  // If the save fails, reload to show the feed as it really is.
+  document.addEventListener("submit", async (e) => {
     if (!e.target.matches("[data-hide]")) return;
     e.preventDefault();
     const row = e.target.closest(".row");
     save(e.target, null, () => location.reload());
+    if (!REDUCED) await row.animate([{}, { opacity: 0 }], { duration: 120, easing: "ease-in", fill: "forwards" }).finished;
     if (paging) paging.remove(row);
     else row.remove();
   });
@@ -258,9 +259,12 @@
     };
 
     const remove = (row) => {
-      rows = rows.filter((r) => r !== row);
-      row.remove();
-      paginate();
+      const kept = rows.filter((r) => r !== row);
+      reflow(kept, () => {
+        rows = kept;
+        row.remove();
+        paginate();
+      });
     };
 
     paging = { pager, paginate, move, remove, leave };
@@ -316,6 +320,22 @@
     if (!waiting) return;
     setTimeout(() => { if (waiting.isConnected) Turbo.visit(location.href, { action: "replace" }); }, 3000);
   }
+
+  // Makes a change to a list (change()), then glides each item that moved from where it was, and fades in the ones
+  // that are new or came back (FLIP: measure, change, measure again, animate the difference). Items that go, just go.
+  const reflow = (items, change) => {
+    const shown = (el) => el.getClientRects().length > 0;  // not hidden, display: none, or detached
+    const before = items.map((el) => (shown(el) ? el.getBoundingClientRect() : null));
+    change();
+    if (REDUCED) return;
+    items.forEach((el, i) => {
+      if (!shown(el)) return;
+      if (!before[i]) return el.animate([{ opacity: 0, transform: "scale(0.96)" }, {}], { duration: 180, easing: "ease-out" });
+      const now = el.getBoundingClientRect();
+      const dx = before[i].left - now.left, dy = before[i].top - now.top;
+      if (dx || dy) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, {}], { duration: 220, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" });
+    });
+  };
 
   // Tabs (Settings and the onboarding tabs step). All and History can only be hidden; custom tabs can also be edited.
   // On save the rows become the "tabs" JSON in settings.json.
