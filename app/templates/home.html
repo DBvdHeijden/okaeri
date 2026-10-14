@@ -33,11 +33,10 @@
   {% endfor %}
 </nav>
 {% else %}
-{#- A post, not a link: the choice is saved for this tab. #}
-<form class="view-switch" method="post" action="/sort/{{ tab.slug }}" aria-label="Sort">
-  {% for sort in ("latest", "recommended") %}
-  <button type="submit" name="sort" value="{{ sort }}" {% if sort == tab.sort %}aria-current="true"{% endif %}>{{ sort | capitalize }}</button>
-  {% endfor %}
+{#- A post, not a link: the choice is saved for this tab. Shows the tab's sort; a click flips it. #}
+{%- set other = "recommended" if tab.sort == "latest" else "latest" %}
+<form class="view-switch" method="post" action="/sort/{{ tab.slug }}">
+  <button type="submit" name="sort" value="{{ other }}" title="Sort this tab by {{ other }}">{{ tab.sort }} ⇅</button>
 </form>
 {% endif %}
 
