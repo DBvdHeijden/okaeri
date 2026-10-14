@@ -7,7 +7,7 @@ Each tab shows stories newest first, or recommended: a small embedding model on 
 open, like and hide, and puts the most relevant stories on top. Your reading history never leaves your device. 
 Your recommendation algorithm is yours, tune it however you'd like. 
 
-![The okaeri homepage: a list of today's stories, with a slowly turning Lorenz figure beside it](.github/screenshot.png)
+![The okaeri homepage: a list of today's stories, with a slowly turning Lorenz figure beside it](.github/main_page.png)
 
 ## Requirements
 
@@ -27,9 +27,15 @@ It puts okaeri in `~/okaeri` (installing [uv](https://docs.astral.sh/uv/) first 
 
 Prefer git? `git clone https://github.com/DBvdHeijden/okaeri.git && cd okaeri && uv run main.py install`.
 
-The first time, okaeri also downloads a language model (~330 MB) and indexes your articles in the background, which can take a few minutes. The feed works meanwhile; Settings (the gear) shows the progress until it's done.
+The first time, okaeri also downloads a language model (~330 MB) and indexes your articles in the background, which can take a few minutes.
 
-**Good to know:** okaeri keeps running in the background and starts whenever you log in. Whenever new stories come in, it runs a small AI model on your computer to rank them: a separate process that uses up to two CPU cores and about 1.3 GB of memory for a short while, then exits. That can cost some battery on a laptop. Stop it any time with `uv run main.py uninstall`. okaeri comes as is, without any warranty; you run it at your own risk.
+**Good to know:** okaeri keeps running in the background and starts whenever you log in. Whenever new stories come in, it runs a small AI model on your computer to rank them: a separate process that uses up to two CPU cores and about 1.3 GB of memory for a short while, then exits. That can cost some battery on a laptop. Stop it any time with `uv run main.py uninstall`. okaeri comes as is, you run it at your own risk.
+
+## Onboarding
+
+The first time you open okaeri, you are walked through our onboarding sequence. This will take a few minutes, and set your homepage up for you. You say what you like to read about, pick sources, mark some stories you'd read, and arrange your tabs. Your answers give the recommendations a head start, and you can change sources, tabs and ranking later in Settings. Your preferences will be further tuned as you use okaeri.
+
+![Onboarding: topics you type land on a map of fields, near the ones they're about](.github/onboarding.png)
 
 ## Update
 
@@ -61,7 +67,7 @@ Everything lives in the repo folder and is never committed: `data/` holds the da
 
 ## Sources
 
-Pick sources on the Settings page (the gear), or list their ids under `sources.enabled` in `settings.json`; the ids are in `catalog/sources.json`. To add a feed that isn't in the catalog, add an entry there (one medium and up to two topic tags from `catalog/tags.json`) and send it as a pull request: in a git checkout `update` stops while you have local changes, and an install.sh install replaces them.
+Pick sources on the Settings page (the gear), or list their ids under `sources.enabled` in `settings.json`. To add a feed that isn't in the catalog, add an entry there (one medium and up to two topic tags from `catalog/tags.json`) and send it as a pull request.
 
 ## Embedding model
 
@@ -89,6 +95,6 @@ uv run scripts/similar.py --item <id>         # nearest to an article; the id is
 
 ## License
 
-okaeri is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0): use it, change it and share it. If you share a changed version, or run one for others as a service, you share its source under the same license. It comes without any warranty.
+okaeri is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0): use it, change it and share it. If you share a changed version, or run one for others as a service, you share its source under the same license.
 
-Contributions are welcome and are licensed under the same AGPL-3.0.
+Contributions are (very!) welcome and are licensed under the same AGPL-3.0.
