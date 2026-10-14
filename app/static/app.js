@@ -271,6 +271,18 @@
     paginate(true);
   }
 
+  // A story's preview card (style.css) opens to its right when it fits there (32px gap, 320px card, a margin),
+  // otherwise below it. Stories in the lower half of the window open it upwards.
+  const placePreview = (e) => {
+    const row = e.target.closest?.(".row, .rate-row");
+    if (!row) return;
+    const box = row.getBoundingClientRect();
+    row.toggleAttribute("data-beside", document.documentElement.clientWidth - box.right >= 32 + 320 + 16);
+    row.toggleAttribute("data-above", box.top > innerHeight / 2);
+  };
+  document.addEventListener("pointerover", placePreview);
+  document.addEventListener("focusin", placePreview);
+
   document.addEventListener("click", (e) => {
     if (e.target.closest("[data-prev]")) paging?.move(-1);
     else if (e.target.closest("[data-next]")) paging?.move(1);

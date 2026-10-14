@@ -47,7 +47,9 @@
   <li class="row" id="item-{{ loop.index }}">
     <div class="row-body">
       <div class="row-text">
-        <a class="title" href="/r/{{ a.id }}" target="_blank" rel="noopener" title="{{ a.title }}">{{ a.title }}</a>
+        {%- set has_summary = a.summary and a.summary != a.title %}
+        {#- The preview card shows the whole title; without one, the tooltip does. #}
+        <a class="title" href="/r/{{ a.id }}" target="_blank" rel="noopener"{% if not has_summary %} title="{{ a.title }}"{% endif %}>{{ a.title }}</a>
         {%- set thread = a.discussion_url if a.discussion_url and a.discussion_url != a.url else none %}
         {#- Without a comment count to link, the source / "also on" text links to the thread instead. #}
         {%- set link_names = thread and a.comments is none %}
@@ -83,6 +85,9 @@
       </form>
       {% endif %}
     </div>
+    {%- if has_summary %}
+    <div class="preview"><p class="preview-title" aria-hidden="true">{{ a.title }}</p><p>{{ a.summary }}</p></div>
+    {%- endif %}
   </li>
   {% endfor %}
 </ol>

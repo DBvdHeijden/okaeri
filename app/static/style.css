@@ -14,6 +14,7 @@
   --accent: #2457B8;
   --warm: #CC6526;      /* the name, and the top of the figure */
   --warm-end: #D98A22;  /* where the figure's gradient ends */
+  --dim: rgb(0 0 0 / 0.06);  /* over the page, around a story's preview card */
   --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", "IBM Plex Sans JP", ui-monospace, "SF Mono", Menlo, monospace;
   color-scheme: light;
@@ -29,6 +30,7 @@
     --accent: #86AEF2;
     --warm: #F2A066;
     --warm-end: #F5C26B;
+    --dim: rgb(0 0 0 / 0.22);
     color-scheme: dark;
   }
 }
@@ -42,6 +44,7 @@
   --accent: #86AEF2;
   --warm: #F2A066;
   --warm-end: #F5C26B;
+  --dim: rgb(0 0 0 / 0.22);
   color-scheme: dark;
 }
 
@@ -311,6 +314,66 @@ h1 {
 .row:hover .hide-btn,
 .row:focus-within .hide-btn { opacity: 1; }
 @media (hover: none) { .hide-btn { opacity: 1; } }
+
+/* Hovering a story shows the start of it, as the feed gave it, in a card: to its right where there's room, else over
+   the rows below (app.js sets data-beside, and data-above for stories low in the window, where the card opens upwards).
+   It waits a moment, so skimming down the list doesn't flash cards, and lets the mouse through, so moving on hands
+   over to the next story's card. On the homepage and in onboarding (steps 5 and 6). */
+:is(.row, .rate-row) { position: relative; }
+.preview { display: none; }
+@media (hover: hover) {
+  .preview {
+    display: block;
+    position: absolute;
+    top: 100%;
+    left: -16px;
+    right: -16px;
+    z-index: 2;
+    padding: 12px 16px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.08);
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 120ms ease, visibility 0s 120ms;
+  }
+  [data-above] > .preview { top: auto; bottom: 100%; }
+  [data-beside] > .preview { top: 0; bottom: auto; left: calc(100% + 32px); right: auto; width: 320px; }
+  [data-beside][data-above] > .preview { top: auto; bottom: 0; }
+  /* The screen dims a little around the card, the story too: a layer over the story, under the card, whose shadow
+     covers the rest. It fades on its own time (the card's fade would take a shadow of its own along). The story
+     stays on top until the dim has gone. */
+  :is(.row, .rate-row):has(> .preview) { transition: z-index 0s 300ms; }
+  :is(.row, .rate-row):has(> .preview)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: var(--dim);
+    box-shadow: 0 0 0 100vmax var(--dim);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+  :is(.row, .rate-row):is(:hover, :has(:is(.title, .source-name):focus-visible))::after {
+    opacity: 1;
+    transition: opacity 300ms ease 350ms;
+  }
+  /* Each row is its own layer (its entrance animation stays applied), so the open one has to come first. */
+  :is(.row, .rate-row):is(:hover, :has(:is(.title, .source-name):focus-visible)) { z-index: 1; }
+  :is(.row, .rate-row):is(:hover, :has(:is(.title, .source-name):focus-visible)) > .preview {
+    visibility: visible;
+    opacity: 1;
+    transition: opacity 160ms ease 350ms, visibility 0s 350ms;
+  }
+}
+.preview p { margin: 0; overflow-wrap: anywhere; }
+.preview .preview-title { color: var(--text); font-weight: 500; margin-bottom: 4px; }
 
 
 .link-btn {

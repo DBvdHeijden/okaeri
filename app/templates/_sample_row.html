@@ -3,7 +3,9 @@
     With preview, just the story: the top stories while you tune the ranking, step 6. #}
 <li class="rate-row" data-id="{{ a.id }}" data-source="{{ a.source_id }}" data-topics="{{ tags_for(a) | sort | join(' ') }}">
   <span class="source-text">
-    <a class="source-name" href="/r/{{ a.id }}" target="_blank" rel="noopener" title="{{ a.title }}">{{ a.title }}</a>
+    {%- set has_summary = a.summary and a.summary != a.title %}
+    {#- The preview card shows the whole title; without one, the tooltip does. #}
+    <a class="source-name" href="/r/{{ a.id }}" target="_blank" rel="noopener"{% if not has_summary %} title="{{ a.title }}"{% endif %}>{{ a.title }}</a>
     {%- set when = a.published_at | ago %}
     {#- One span per part; the stylesheet puts a dash between them, as on the homepage. #}
     <span class="meta">
@@ -24,4 +26,7 @@
     </button>
   </form>
   {% endif %}
+  {%- if has_summary %}
+  <div class="preview"><p class="preview-title" aria-hidden="true">{{ a.title }}</p><p>{{ a.summary }}</p></div>
+  {%- endif %}
 </li>
