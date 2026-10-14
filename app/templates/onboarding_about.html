@@ -26,7 +26,8 @@
 
   <fieldset class="about-field" data-about-fallback>
     <legend>A few words each</legend>
-    {%- set examples = ["protein design", "Rust compilers", "Dutch politics", "black holes", "urban cycling", "sleep science", "chess engines", "rewilding"] %}
+    {%- set examples = ["protein design", "Rust compilers", "Dutch politics", "black holes", "urban cycling", "sleep science", "chess engines", "rewilding",
+                         "type theory", "fusion energy", "game design", "the history of maps"] %}
     {%- for n in range(max_interests) %}
     <input type="text" name="about" value="{{ about[n] if n < about | length else '' }}" placeholder="Like: {{ examples[n] }}" maxlength="100" aria-label="Interest {{ n + 1 }}">
     {%- endfor %}

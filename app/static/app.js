@@ -482,8 +482,9 @@
 
   // Onboarding step 3: your interests as points on a map of the fields. The server places each one
   // (/onboarding/about/place: towards the fields it's nearest to) and names the sources nearest to it; those come out
-  // of it one by one and drift to their own places, a thread back to it. Points spring towards their places, nudge
-  // each other apart and drift a little; hover one to see what it is. Without JS the step is plain inputs.
+  // of it one by one and drift to their own places, a thread back to it. After each change, points spring towards their
+  // places, nudge each other apart and drift a little, slowing down until they stand still. Hover one to see what it
+  // is. Without JS the step is plain inputs.
   function initAboutMap() {
     const map = document.querySelector("[data-about-map]");
     if (!map) return;
@@ -535,6 +536,7 @@
         map.append(el);
         labels.push({ ...field, el });
       }
+      stir();
       interests.forEach(place);  // the ones you wrote while it loaded
     }
 
@@ -547,6 +549,7 @@
       Object.assign(item, { at: { x, y }, field });
       item.el.classList.remove("waiting");
       light();
+      stir();
       ids.forEach((id, n) => setTimeout(() => sprout(item, id), 500 + n * 180));  // once it has nearly arrived
     }
 
@@ -558,6 +561,7 @@
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       threads.append(line);
       item.lines.set(id, line);
+      stir();
     }
 
     // Each interest lights up the name of the field it's nearest to.
@@ -585,6 +589,7 @@
       chips.append(chip);
       interests.push(item);
       full();
+      stir();
       place(item);
     }
 
@@ -604,6 +609,7 @@
       }
       light();
       full();
+      stir();
       input.focus();
     }
 
@@ -635,16 +641,27 @@
     });
     map.addEventListener("pointerout", (e) => { if (nodeOf.has(e.target)) tip.hidden = true; });
 
-    // Each point springs towards its place (plus a slow drift of its own), and points too close push apart.
+    // A change (stir) gives the map life, which runs out over SETTLE_MS: each point springs towards its place, drifting
+    // around it, and points too close push apart. As life runs out the drift fades and the spring gets heavier, so it
+    // all slows down rather than stops; at 0 nothing moves, and the loop stops until the next change.
+    const SETTLE_MS = 2000;
+    let calmAt = 0, moving = false;
+    function stir() {
+      calmAt = performance.now() + SETTLE_MS;
+      if (!moving) requestAnimationFrame(frame);
+      moving = true;
+    }
+    new ResizeObserver(stir).observe(map);  // more chips below make it smaller: everything moves in
+
     function frame(now) {
-      if (!map.isConnected) return;  // another page
-      const t = now / 1000;
+      if (!map.isConnected || now > calmAt) return void (moving = false);
+      const life = (calmAt - now) / SETTLE_MS, damping = 0.5 + 0.32 * life, t = now / 1000;
       const all = [...interests, ...sources.values()];
       for (const n of all) {
         const goal = toPx(n.at);
-        const gx = goal.x + Math.sin(t * 0.5 + n.phase) * 5, gy = goal.y + Math.cos(t * 0.4 + n.phase) * 5;
-        n.vx = (n.vx + (gx - n.x) * 0.012) * 0.88;
-        n.vy = (n.vy + (gy - n.y) * 0.012) * 0.88;
+        const gx = goal.x + Math.sin(t * 2.2 + n.phase) * 5 * life, gy = goal.y + Math.cos(t * 1.9 + n.phase) * 5 * life;
+        n.vx = (n.vx + (gx - n.x) * 0.035) * damping;
+        n.vy = (n.vy + (gy - n.y) * 0.035) * damping;
       }
       for (let i = 0; i < all.length; i++) {
         for (let j = i + 1; j < all.length; j++) {
@@ -676,7 +693,7 @@
 
     earlier.forEach(add);
     loadMap();
-    requestAnimationFrame(frame);
+    stir();
   }
 
   // Onboarding and settings

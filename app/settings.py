@@ -13,6 +13,7 @@ log = logging.getLogger("okaeri")
 PATH = ROOT / "settings.json"
 EXAMPLE = ROOT / "settings.example.json"
 MAX_TABS = 6  # custom tabs, besides All and History
+MAX_INTERESTS = 12  # what you'd like to read about, onboarding step 3
 # History is chronological by design; every other tab sorts by "latest" or "recommended".
 ALL_TAB = {"name": "All", "slug": "all", "media": (), "topics": (), "sources": (), "history": False, "builtin": True, "sort": "recommended"}
 HISTORY_TAB = {"name": "History", "slug": "history", "media": (), "topics": (), "sources": (), "history": True, "builtin": True, "sort": "latest"}
@@ -110,7 +111,7 @@ def about() -> list[str]:
 
 def set_about(about: list[str]) -> None:
     settings = load()
-    settings["about"] = list(dict.fromkeys(a.strip()[:100] for a in about if a.strip()))[:8]
+    settings["about"] = list(dict.fromkeys(a.strip()[:100] for a in about if a.strip()))[:MAX_INTERESTS]
     save(settings)
 
 

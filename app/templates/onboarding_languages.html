@@ -1,36 +1,41 @@
 {% extends "base.html" %}
-{% block title %}Languages · okaeri{% endblock %}
+{% block title %}Reading · okaeri{% endblock %}
 {% block page_class %}wide{% endblock %}
 {% block content %}
 <header class="masthead">
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
-    <h1>Which languages do you read?</h1>
-    <p class="date">Step 2 of 8 · We'll only suggest sources in these. Pick at least one.</p>
+    <h1>How do you like to read?</h1>
+    <p class="date">Step 2 of 8 · The languages and media to read in: at least one of each. We'll only bring up sources that fit.</p>
   </div>
 </header>
 
 <form method="post" action="/onboarding/languages" data-onboarding>
+  <div class="columns">
+  {% for legend, name, options in groups %}
   <fieldset class="group">
-    <legend>Languages</legend>
+    <legend>{{ legend }}</legend>
     <ul class="sources">
-      {% for code, name, n in options %}
+      {% for value, label, description, n in options %}
       <li>
         <label class="source">
           <span class="source-text">
-            <span class="source-name">{{ name }}</span>
-            <span class="source-desc">{{ n | count("source") }}</span>
+            <span class="source-name">{{ label }}</span>
+            <span class="source-desc">{% if description %}{{ description }} · {% endif %}{{ n | count("source") }}</span>
           </span>
-          <input type="checkbox" class="check" aria-label="{{ name }}" name="languages" value="{{ code }}" {% if code in chosen %}checked{% endif %}>
+          <input type="checkbox" class="check" aria-label="{{ label }}" name="{{ name }}" value="{{ value }}" {% if value in chosen %}checked{% endif %}>
         </label>
       </li>
       {% endfor %}
     </ul>
   </fieldset>
+  {% endfor %}
+  </div>
 
   <div class="footer-bar">
     <span class="footer-actions">
       <span data-selected-count aria-live="polite">0 selected</span>
+      {% if missing %}<span class="form-note" role="alert">{{ missing }}</span>{% endif %}
     </span>
     <span class="footer-actions">
       <a class="quiet-btn" href="/onboarding?redo=1">Back</a>

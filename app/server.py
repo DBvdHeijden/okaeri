@@ -34,7 +34,7 @@ PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 SAMPLE_SIZE = 5
 TOP_SIZE = 5  # the stories onboarding shows while you tune the ranking
 SOURCES_PER_INTEREST = 3  # onboarding ticks the sources nearest to each interest you wrote
-MAX_INTERESTS = 8  # onboarding step 3: things you'd like to read about
+MIN_MATCH = 0.62  # ...if at least this close: below it, a source isn't about it ("sourdough" scores ~0.60 everywhere)
 RING_PULL = 0.78  # step 3's map: how far toward its fields a point goes, the fields being on a ring of 1
 TEMPERATURE = 0.015  # how sharply a point goes to its nearest field rather than between several
 HISTORY_SIZE = 100
@@ -312,7 +312,8 @@ def settings_submit(
     return RedirectResponse("/", status_code=303)
 
 
-# Onboarding: your name (optional), languages, interests, sources, a sample of stories to rate, then (optionally) tabs.
+# Onboarding: your name (optional), the languages and media you read, what you like to read about, fields, sources,
+# a sample of stories to rate, the ranking, then (optionally) tabs.
 
 def spoken_sources() -> list[Source]:
     return [s for s in SOURCES if speaks(s, settings.languages())]
@@ -365,7 +366,7 @@ def onboarding_name_submit(name: Annotated[str, Form()] = ""):
 def onboarding_about(request: Request):
     wake_refresher(request)
     return templates.TemplateResponse(
-        request, "onboarding_about.html", {"about": settings.about(), "max_interests": MAX_INTERESTS}
+        request, "onboarding_about.html", {"about": settings.about(), "max_interests": settings.MAX_INTERESTS}
     )
 
 
@@ -413,14 +414,21 @@ async def make_about_map() -> dict:
         vectors = await vectors_for([topic_document(t) for t in topics] + [source_document(s) for s in SOURCES])
         topic_vectors, source_vectors = vectors[: len(topics)], vectors[len(topics) :]
         ring = field_ring(topic_vectors)
-        about_map.update(topics=topics, topic_vectors=topic_vectors, ring=ring, source_vectors=source_vectors, json={
-            "fields": [{"name": t, "x": x, "y": y} for t, (x, y) in zip(topics, ring.tolist())],
-            "sources": [
+        about_map.update(
+            topics=topics, topic_vectors=topic_vectors, ring=ring, source_vectors=source_vectors,
+            fields=[{"name": t, "x": x, "y": y} for t, (x, y) in zip(topics, ring.tolist())],
+            sources=[
                 {"id": s.id, "name": s.name, "description": s.description, "x": x, "y": y}
                 for s, (x, y) in zip(SOURCES, place(source_vectors, topic_vectors, ring).tolist())
             ],
-        })
+        )
     return about_map
+
+
+def readable() -> list[int]:
+    """The sources (as indexes into SOURCES) in the languages and media you read: the only ones the map brings up."""
+    media = settings.interests()["media"]
+    return [i for i, s in enumerate(SOURCES) if speaks(s, settings.languages()) and s.medium in media]
 
 
 def waiting() -> JSONResponse:
@@ -431,7 +439,8 @@ def waiting() -> JSONResponse:
 async def onboarding_about_map():
     if not model_downloaded():
         return waiting()
-    return (await make_about_map())["json"]
+    m = await make_about_map()
+    return {"fields": m["fields"], "sources": [m["sources"][i] for i in readable()]}
 
 
 @app.post("/onboarding/about/place")
@@ -442,11 +451,13 @@ async def onboarding_about_place(text: Annotated[str, Form()]):
     m = await make_about_map()
     vector = (await vectors_for([about_document(text.strip()[:100])]))[0]
     (x, y), = place(vector[None], m["topic_vectors"], m["ring"]).tolist()
-    nearest_sources = np.argsort(-(m["source_vectors"] @ vector))[:SOURCES_PER_INTEREST]
+    candidates = readable()
+    closeness = m["source_vectors"][candidates] @ vector
+    nearest_sources = [i for i in np.argsort(-closeness)[:SOURCES_PER_INTEREST] if closeness[i] >= MIN_MATCH]
     return {
         "x": x, "y": y,
         "field": m["topics"][int(np.argmax(m["topic_vectors"] @ vector))],
-        "sources": [SOURCES[i].id for i in nearest_sources],
+        "sources": [SOURCES[candidates[i]].id for i in nearest_sources],
     }
 
 
@@ -460,37 +471,51 @@ def about_scores(documents: dict[str, str]) -> dict[str, np.ndarray]:
     return {i: np.array([v @ vectors[text_key(d)] for v in interests]) for i, d in documents.items() if text_key(d) in vectors}
 
 
-def nearest_each(scores: dict[str, np.ndarray], k: int) -> list[str]:
-    """The k ids nearest to each interest in turn, without repeats."""
+def nearest_each(scores: dict[str, np.ndarray], k: int, floor: float = -1) -> list[str]:
+    """The k ids nearest to each interest in turn, at least `floor` close, without repeats."""
     interests = len(next(iter(scores.values()), []))
     by_interest = (sorted(scores, key=lambda i: scores[i][n], reverse=True)[:k] for n in range(interests))
-    return list(dict.fromkeys(i for ids in by_interest for i in ids))
+    return list(dict.fromkeys(i for n, ids in enumerate(by_interest) for i in ids if scores[i][n] >= floor))
 
 
 @app.get("/onboarding/languages", response_class=HTMLResponse)
 def onboarding_languages(request: Request):
-    options = [(code, name, sum(s.language == code for s in SOURCES)) for code, name in LANGUAGES.items()]
+    return reading_page(request, {*settings.languages(), *settings.interests()["media"]})
+
+
+def reading_page(request: Request, chosen: set[str], missing: str = "", status_code: int = 200) -> HTMLResponse:
+    """Step 2: how you like to read, before what about, so the next step only brings up sources you'll get."""
+    groups = [
+        ("Languages", "languages", [(code, name, "", sum(s.language == code for s in SOURCES)) for code, name in LANGUAGES.items()]),
+        ("Media", "media", [(m, medium["label"], medium["description"], sum(s.medium == m for s in SOURCES)) for m, medium in MEDIA.items()]),
+    ]
     return templates.TemplateResponse(
-        request, "onboarding_languages.html", {"options": options, "chosen": settings.languages()}
+        request, "onboarding_languages.html", {"groups": groups, "chosen": chosen, "missing": missing}, status_code=status_code
     )
 
 
 @app.post("/onboarding/languages")
-def onboarding_languages_submit(languages: Annotated[list[str] | None, Form()] = None):
-    picked = [lang for lang in languages or [] if lang in LANGUAGES]
-    if not picked:
-        return RedirectResponse("/onboarding/languages", status_code=303)
-    settings.set_languages(picked)
+def onboarding_languages_submit(
+    request: Request, languages: Annotated[list[str] | None, Form()] = None, media: Annotated[list[str] | None, Form()] = None
+):
+    languages = [lang for lang in languages or [] if lang in LANGUAGES]
+    media = [m for m in media or [] if m in MEDIA]
+    if not languages or not media:
+        # The same step again, with your picks and what's missing. 422: Turbo only shows a failed form's page.
+        missing = " and ".join(word for word, picked in (("one language", languages), ("one medium", media)) if not picked)
+        return reading_page(request, {*languages, *media}, f"Pick at least {missing}.", 422)
+    settings.set_languages(languages)
+    settings.set_interests(media, settings.interests()["topics"])
     return RedirectResponse("/onboarding/about", status_code=303)
 
 
 def interests_page(
     request: Request, chosen: set[str], missing: str = "", status_code: int = 200, suggested: bool = False
 ) -> HTMLResponse:
-    groups = [
-        ("Fields", "topics", [(t, t, TAG_DESCRIPTIONS[t], source_count(lambda s: t in s.tags)) for t in sorted(TOPICS)]),
-        ("Media", "media", [(m, medium["label"], medium["description"], source_count(lambda s: s.medium == m)) for m, medium in MEDIA.items()]),
-    ]
+    # Counted among the sources in the languages and media you read: what each field would actually bring.
+    media = settings.interests()["media"]
+    counts = [(t, source_count(lambda s: t in s.tags and s.medium in media)) for t in sorted(TOPICS)]
+    groups = [("Fields", "topics", [(t, t, TAG_DESCRIPTIONS[t], n) for t, n in counts])]
     return templates.TemplateResponse(
         request, "onboarding_interests.html", {"groups": groups, "chosen": chosen, "missing": missing, "suggested": suggested},
         status_code=status_code,
@@ -502,20 +527,16 @@ def onboarding_interests(request: Request):
     interests = settings.interests()
     # The first time through, each interest you wrote ticks the field nearest to it.
     suggested = [] if interests["topics"] else nearest_each(about_scores({t: topic_document(t) for t in TOPICS}), 1)
-    return interests_page(request, {*interests["media"], *interests["topics"], *suggested}, suggested=bool(suggested))
+    return interests_page(request, {*interests["topics"], *suggested}, suggested=bool(suggested))
 
 
 @app.post("/onboarding/interests")
-def onboarding_interests_submit(
-    request: Request, media: Annotated[list[str] | None, Form()] = None, topics: Annotated[list[str] | None, Form()] = None
-):
-    media = [m for m in media or [] if m in MEDIA]
+def onboarding_interests_submit(request: Request, topics: Annotated[list[str] | None, Form()] = None):
     topics = [t for t in topics or [] if t in TOPICS]
-    if not media or not topics:
-        # The same step again, with your picks and what's missing. 422: Turbo only shows a failed form's page.
-        missing = " and ".join(word for word, picked in (("one field", topics), ("one medium", media)) if not picked)
-        return interests_page(request, {*media, *topics}, f"Pick at least {missing}.", 422)
-    settings.set_interests(media, topics)
+    if not topics:
+        # The same step again, with what's missing. 422: Turbo only shows a failed form's page.
+        return interests_page(request, set(), "Pick at least one field.", 422)
+    settings.set_interests(settings.interests()["media"], topics)
     settings.start_tabs(topics)  # step 8 opens with them
     return RedirectResponse("/onboarding/sources", status_code=303)
 
@@ -541,7 +562,7 @@ def onboarding_sources(request: Request):
             for label, sources in groups.items()
         }
         best_per_fold = [sources[0].id for sources in groups.values() if sources[0].id in scores]
-        selected = list(dict.fromkeys(nearest_each(scores, SOURCES_PER_INTEREST) + best_per_fold))
+        selected = list(dict.fromkeys(nearest_each(scores, SOURCES_PER_INTEREST, MIN_MATCH) + best_per_fold))
         suggested = True
     selected = selected or [s.id for s in offered]
     groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items()}

@@ -127,6 +127,9 @@ button { font: inherit; color: inherit; }
   align-items: start;
 }
 @media (max-width: 680px) { .columns { grid-template-columns: minmax(0, 1fr); } }
+/* One list in two columns (step 4's fields), so it fits the window like two lists side by side. */
+.sources.split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 48px; }
+@media (max-width: 680px) { .sources.split { grid-template-columns: minmax(0, 1fr); } }
 
 .top-actions {
   position: absolute;
@@ -491,7 +494,8 @@ h1 {
 
 /* Step 3's map (app.js: initAboutMap): the fields' names on a ring, your interests as warm points among them, their
    sources as small dots with a thread back. Everything is placed by transform from the top left corner. */
-.about-map { position: relative; height: clamp(320px, 52vh, 520px); margin-top: 8px; }
+/* It takes the height the rest of the step leaves, so more chips make it smaller instead of the page longer. */
+.about-map { position: relative; flex: 1 1 0; min-height: 180px; max-height: 560px; }
 .about-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .about-links line { stroke: color-mix(in srgb, var(--warm) 35%, transparent); stroke-width: 1; }
 .about-label, .about-point, .about-source, .about-tip { position: absolute; top: 0; left: 0; }
@@ -536,7 +540,7 @@ h1 {
   pointer-events: none;
 }
 .about-tip strong { display: block; color: var(--text); font-weight: 500; }
-.about-entry { max-width: 560px; margin: 0 auto 24px; }
+.about-entry { width: 100%; max-width: 560px; margin: 0 auto; }
 .about-input {
   width: 100%;
   min-height: 48px;

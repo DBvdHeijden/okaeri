@@ -5,17 +5,16 @@
 <header class="masthead">
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
-    <h1>What are you curious about?</h1>
-    <p class="date">Step 4 of 8 · Pick the fields you enjoy and the media to read them in: at least one of each.{% if suggested %} We've ticked the fields closest to what you wrote.{% endif %}</p>
+    <h1>Which fields?</h1>
+    <p class="date">Step 4 of 8 · Pick the fields you enjoy: at least one.{% if suggested %} We've ticked the fields closest to what you wrote.{% endif %}</p>
   </div>
 </header>
 
 <form method="post" action="/onboarding/interests" data-onboarding>
-  <div class="columns">
   {% for legend, name, options in groups %}
   <fieldset class="group">
     <legend>{{ legend }}</legend>
-    <ul class="sources">
+    <ul class="sources split">
       {% for value, label, description, n in options %}
       <li>
         <label class="source">
@@ -30,7 +29,6 @@
     </ul>
   </fieldset>
   {% endfor %}
-  </div>
 
   <div class="footer-bar">
     <span class="footer-actions">
