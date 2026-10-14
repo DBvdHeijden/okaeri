@@ -113,7 +113,7 @@ button { font: inherit; color: inherit; }
 /* Steps 5 and 6: the stories on the left; on the right a butterfly that fills in as you rate (5), or the dials
    that pick the stories (6). Stacked when narrow. */
 .rate-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 48px; align-items: start; margin-bottom: 40px; }
-.learning { display: block; width: 240px; aspect-ratio: 1; margin: 0 auto; }
+.learning { display: block; width: 100%; max-width: 360px; aspect-ratio: 1; margin: 0 auto; }  /* about the homepage's size */
 @media (max-width: 760px) {
   .rate-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
 }
