@@ -23,7 +23,7 @@ def load() -> dict:
     if not PATH.exists():
         shutil.copy(EXAMPLE, PATH)
     # settings.json overrides the defaults key by key, so new settings reach existing users.
-    defaults, own = json.loads(EXAMPLE.read_text()), upgrade(json.loads(PATH.read_text()))
+    defaults, own = json.loads(EXAMPLE.read_text(encoding="utf-8")), upgrade(json.loads(PATH.read_text(encoding="utf-8")))
     return defaults | own | {"ranking": defaults["ranking"] | own.get("ranking", {})}
 
 
@@ -44,7 +44,7 @@ def reset() -> None:
 
 
 def save(settings: dict) -> None:
-    PATH.write_text(json.dumps(settings, indent=2) + "\n")
+    PATH.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
 
 
 def enabled_sources() -> list[str]:
@@ -177,7 +177,7 @@ def set_sort(tab_slug: str, sort: str) -> bool:
 def start_tabs(topics: list[str]) -> None:
     """Onboarding: a tab for each field you picked comes first, then the example's tabs that aren't one of those. An
     example tab of just that field lends its name ("AI" rather than "Ai")."""
-    examples = [t for t in json.loads(EXAMPLE.read_text())["tabs"] if "builtin" not in t]
+    examples = [t for t in json.loads(EXAMPLE.read_text(encoding="utf-8"))["tabs"] if "builtin" not in t]
     names = {tuple(t.get("topics", [])): t["name"] for t in examples if not t.get("media") and not t.get("sources")}
     fields = [{"name": names.get((t,), t.capitalize()), "topics": [t]} for t in topics]
     rest = [t for t in examples if not any(f["name"] == t["name"] for f in fields)]

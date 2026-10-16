@@ -181,7 +181,7 @@ def home(
             "show": show,
             "history_views": HISTORY_VIEWS,
             "pending": store().pending(selected),
-            "today": datetime.now().strftime("%A, %-d %B"),
+            "today": datetime.now().strftime("%A, %d %B").replace(" 0", " "),  # not %-d: Windows doesn't have it
             "name": settings.name(),
         },
     )

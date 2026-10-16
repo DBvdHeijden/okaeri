@@ -23,6 +23,12 @@ Paste this into a terminal:
 curl -fsSL https://raw.githubusercontent.com/DBvdHeijden/okaeri/main/install.sh | sh
 ```
 
+On Windows, in PowerShell:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/DBvdHeijden/okaeri/main/install.ps1 | iex"
+```
+
 It puts okaeri in `~/okaeri` (installing [uv](https://docs.astral.sh/uv/) first if you don't have it) and opens http://localhost:12362 in your browser, where you pick your sources. It runs in the background and starts whenever you log in; set it as your browser's homepage.
 
 Prefer git? `git clone https://github.com/DBvdHeijden/okaeri.git && cd okaeri && uv run main.py install`.

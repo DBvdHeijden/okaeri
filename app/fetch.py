@@ -8,6 +8,7 @@ import asyncio
 import html
 import logging
 import re
+import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -35,6 +36,7 @@ HOST_INTERVAL = {"export.arxiv.org": 3.0}  # arXiv API asks for >= 3s between re
 TICK_SECONDS = 60
 EMBED_TIMEOUT_SECONDS = 600
 EMBED_RETRY_SECONDS = 1800  # after a failure; each try loads a ~1.3 GB child, so not every minute
+IDLE_PRIORITY = subprocess.IDLE_PRIORITY_CLASS if sys.platform == "win32" else 0  # Windows has no nice(); app.embed calls it elsewhere
 
 # --- normalisation -----------------------------------------------------------
 
@@ -306,7 +308,7 @@ class Refresher:
             return
         if not await asyncio.to_thread(lambda: pending(self.store) or pending_texts(self.store)):
             return
-        child = await asyncio.create_subprocess_exec(sys.executable, "-m", "app.embed", cwd=ROOT)
+        child = await asyncio.create_subprocess_exec(sys.executable, "-m", "app.embed", cwd=ROOT, creationflags=IDLE_PRIORITY)
         self.embedding = True
         try:
             await asyncio.wait_for(child.wait(), EMBED_TIMEOUT_SECONDS)
