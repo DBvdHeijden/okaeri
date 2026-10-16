@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,7 +35,7 @@ PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 SAMPLE_SIZE = 5
 TOP_SIZE = 5  # the stories onboarding shows while you tune the ranking
 SOURCES_PER_INTEREST = 3  # onboarding ticks the sources nearest to each interest you wrote
-MIN_MATCH = 0.65  # ...if at least this close: below it, a source isn't about it (unrelated ones mostly score 0.60-0.64)
+MIN_MATCH = 0.67  # ...if at least this close: below it, a source isn't about it (unrelated ones score up to ~0.66)
 RING_PULL = 0.78  # step 3's map: how far toward its fields a point goes, the fields being on a ring of 1
 TEMPERATURE = 0.015  # how sharply a point goes to its nearest field rather than between several
 HISTORY_SIZE = 100
@@ -359,8 +360,9 @@ def onboarding_name_submit(name: Annotated[str, Form()] = ""):
     return RedirectResponse("/onboarding/languages", status_code=303)
 
 
-# Step 3: what you'd like to read about, in your own words, a few words each. Each becomes a point on a map of the
-# fields, and the sources nearest to it come out of it. Later steps tick the fields and sources nearest to them.
+# Step 3: what you'd like to read about, in your own words, a few words each. Each becomes a point on a map, near
+# the fields it's about (they aren't drawn: a ring of names was a lot to take in), and the sources nearest to it come
+# out of it. Later steps tick the fields and sources nearest to them.
 
 @app.get("/onboarding/about", response_class=HTMLResponse)
 def onboarding_about(request: Request):
@@ -416,7 +418,6 @@ async def make_about_map() -> dict:
         ring = field_ring(topic_vectors)
         about_map.update(
             topics=topics, topic_vectors=topic_vectors, ring=ring, source_vectors=source_vectors,
-            fields=[{"name": t, "x": x, "y": y} for t, (x, y) in zip(topics, ring.tolist())],
             sources=[
                 {"id": s.id, "name": s.name, "description": s.description, "x": x, "y": y}
                 for s, (x, y) in zip(SOURCES, place(source_vectors, topic_vectors, ring).tolist())
@@ -440,12 +441,12 @@ async def onboarding_about_map():
     if not model_downloaded():
         return waiting()
     m = await make_about_map()
-    return {"fields": m["fields"], "sources": [m["sources"][i] for i in readable()]}
+    return {"sources": [m["sources"][i] for i in readable()]}
 
 
 @app.post("/onboarding/about/place")
 async def onboarding_about_place(text: Annotated[str, Form()]):
-    """Where one of your interests goes on the map, the field it's nearest to, and the sources nearest to it."""
+    """Where one of your interests goes on the map, the sources nearest to it, and the field most of them cover."""
     if not model_downloaded():
         return waiting()
     m = await make_about_map()
@@ -453,12 +454,10 @@ async def onboarding_about_place(text: Annotated[str, Form()]):
     (x, y), = place(vector[None], m["topic_vectors"], m["ring"]).tolist()
     candidates = readable()
     closeness = m["source_vectors"][candidates] @ vector
-    nearest_sources = [i for i in np.argsort(-closeness)[:SOURCES_PER_INTEREST] if closeness[i] >= MIN_MATCH]
-    return {
-        "x": x, "y": y,
-        "field": m["topics"][int(np.argmax(m["topic_vectors"] @ vector))],
-        "sources": [SOURCES[candidates[i]].id for i in nearest_sources],
-    }
+    nearest = [SOURCES[candidates[i]] for i in np.argsort(-closeness)[:SOURCES_PER_INTEREST] if closeness[i] >= MIN_MATCH]
+    # The nearest source's field wins a tie. None without sources: then it isn't clearly about any field.
+    fields = Counter(t for s in nearest for t in s.tags).most_common(1)
+    return {"x": x, "y": y, "field": fields[0][0] if fields else None, "sources": [s.id for s in nearest]}
 
 
 def about_scores(documents: dict[str, str]) -> dict[str, np.ndarray]:

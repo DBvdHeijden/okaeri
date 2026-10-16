@@ -19,7 +19,7 @@ from app.fetch import refresh
 from app.sources import SOURCES
 from app.store import Store
 
-SAMPLE_SIZE = 5
+SAMPLE_SIZE = 10
 CATALOG = ROOT / "catalog" / "sources.json"
 
 with tempfile.TemporaryDirectory() as tmp:
