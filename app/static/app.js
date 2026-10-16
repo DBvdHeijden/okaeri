@@ -481,15 +481,16 @@
   }
 
   // Onboarding step 3: your interests as points on a map. The server places each one (/onboarding/about/place:
-  // towards the fields it's nearest to, which aren't drawn) and names the sources nearest to it and the field most of
-  // them cover; the sources come out of it one by one and drift to their own places, a thread back to it, and the
-  // field shows beside it. After each change, points spring towards their
-  // places, nudge each other apart and drift a little, slowing down until they stand still. Hover one to see what it
-  // is. Without JS the step is plain inputs.
+  // towards the fields it's nearest to, which aren't drawn) and names the sources about it; those come out of it one
+  // by one and gather around it, the better ones closer and bigger. A source two interests share sits between them.
+  // After each change, points spring towards their places, nudge each
+  // other apart and drift a little, slowing down until they stand still. Hover one to see what it is. Without JS the
+  // step is plain inputs.
   function initAboutMap() {
     const map = document.querySelector("[data-about-map]");
     if (!map) return;
     const form = map.closest("form");
+    const count = form.querySelector("[data-about-count]");
     const entry = form.querySelector("[data-about-entry]");
     const input = entry.querySelector("[data-about-input]");
     const chips = entry.querySelector("[data-about-chips]");
@@ -501,9 +502,9 @@
     fallback.remove();
     map.hidden = entry.hidden = false;
 
-    let catalog = null;          // source id -> {name, description, x, y}, once the map is in
-    const interests = [];        // {text, el, chip, field, at, lines: source id -> <line>, ...motion}
-    const sources = new Map();   // id -> {info, el, from: the interests it came out of, ...motion}
+    let catalog = null;          // source id -> {name, description}, once the map is in
+    const interests = [];        // {text, el, at, matches: source id -> closeness, best, lines: source id -> <line>, ...motion}
+    const sources = new Map();   // id -> {id, info, el, from: the interests it came out of, ...motion}
     const nodeOf = new WeakMap(); // element -> its interest or source, for the tooltip
 
     // The server's places are inside a ring of 1; here the ring is an ellipse filling the map.
@@ -511,14 +512,43 @@
       const w = map.clientWidth, h = map.clientHeight;
       return { x: w / 2 + x * (w / 2 - 70), y: h / 2 + y * (h / 2 - 28) };
     };
+    // Each node keeps a box around its point (l, r, t, b) that others keep out of.
     const node = (className, from, at) => {
       const el = document.createElement("span");
       el.className = className;
       map.append(el);
-      const n = { el, x: from.x, y: from.y, vx: 0, vy: 0, at, size: el.offsetWidth, phase: Math.random() * 7 };
+      const r = el.offsetWidth / 2 + 4;
+      const n = { el, x: from.x, y: from.y, vx: 0, vy: 0, at, box: { l: -r, r, t: -r, b: r }, phase: Math.random() * 7 };
       nodeOf.set(el, n);
       return n;
     };
+
+    // How well a source fits an interest: 1 for its best match, 0 for its weakest.
+    const fit = (item, id) => {
+      const low = Math.min(...item.matches.values());
+      return item.best === low ? 1 : (item.matches.get(id) - low) / (item.best - low);
+    };
+
+    // An interest goes where the server placed it. A source goes around the interest it's about, further out the
+    // weaker it fits, each next one in the biggest gap left (the golden angle); or between the interests it's about.
+    function goal(n) {
+      if (!n.from) return toPx(n.at);
+      const near = [...n.from];
+      const x = near.reduce((sum, i) => sum + i.x, 0) / near.length;
+      const y = near.reduce((sum, i) => sum + i.y, 0) / near.length;
+      if (near.length > 1) return { x, y };
+      const item = near[0], rank = [...item.matches.keys()].indexOf(n.id);
+      const reach = 32 + 48 * (1 - fit(item, n.id)), angle = item.phase + rank * 2.4;
+      return { x: x + Math.cos(angle) * reach * 1.4, y: y + Math.sin(angle) * reach };  // the map is wider than tall
+    }
+
+    // The better a source fits any of its interests, the bigger its dot.
+    function resize(source) {
+      const size = 5 + 5 * Math.max(...[...source.from].map((i) => fit(i, source.id)));
+      source.el.style.setProperty("--size", `${size}px`);
+      const r = size / 2 + 4;
+      source.box = { l: -r, r, t: -r, b: r };
+    }
 
     async function loadMap() {
       const note = map.querySelector("[data-about-wait]");
@@ -538,24 +568,32 @@
       const res = await fetch("/onboarding/about/place", { method: "POST", body: new URLSearchParams({ text: item.text }) });
       if (!item.el.isConnected) return;  // removed meanwhile
       if (!res.ok) return setTimeout(() => place(item), 3000);
-      const { x, y, field, sources: ids } = await res.json();
-      Object.assign(item, { at: { x, y }, field });
+      const { x, y, sources: matches } = await res.json();
+      Object.assign(item, {
+        at: { x, y }, found: matches.length, best: matches[0]?.closeness,
+        matches: new Map(matches.map((m) => [m.id, m.closeness])),
+      });
       item.el.classList.remove("waiting");
-      item.el.dataset.field = field ?? "";
       stir();
-      ids.forEach((id, n) => setTimeout(() => sprout(item, id), 500 + n * 180));  // once it has nearly arrived
+      matches.forEach((m, n) => setTimeout(() => sprout(item, m.id), 500 + n * 120));  // once it has nearly arrived
     }
 
     function sprout(item, id) {
       if (!item.el.isConnected) return;
-      const info = catalog.get(id);
-      if (!sources.has(id)) sources.set(id, Object.assign(node("about-source", item, info), { info, from: new Set() }));
-      sources.get(id).from.add(item);
+      if (!sources.has(id)) sources.set(id, Object.assign(node("about-source", item), { id, info: catalog.get(id), from: new Set() }));
+      const source = sources.get(id);
+      source.from.add(item);
+      resize(source);
+      counted();
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       threads.append(line);
       item.lines.set(id, line);
       stir();
     }
+
+    const counted = () => {
+      count.textContent = `${sources.size} ${sources.size === 1 ? "source" : "sources"} found`;
+    };
 
     function add(text) {
       text = text.trim().slice(0, 100);
@@ -563,7 +601,7 @@
       // It comes up out of the input, and waits there until the server has placed it.
       const start = { x: map.clientWidth / 2 + (Math.random() - 0.5) * 60, y: map.clientHeight };
       const waitAt = { x: (Math.random() - 0.5) * 0.4, y: 0.7 };
-      const item = Object.assign(node("about-point waiting", start, waitAt), { text, field: null, lines: new Map() });
+      const item = Object.assign(node("about-point waiting", start, waitAt), { text, lines: new Map() });
       item.vy = -6;
       const value = Object.assign(document.createElement("input"), { type: "hidden", name: "about", value: text });
       form.append(value);
@@ -590,11 +628,15 @@
         line.remove();
         const source = sources.get(id);
         source.from.delete(item);
-        if (source.from.size) continue;
+        if (source.from.size) {
+          resize(source);
+          continue;
+        }
         sources.delete(id);  // no interest of yours left near it: it fades out
         source.el.classList.add("leaving");
         setTimeout(() => source.el.remove(), 300);
       }
+      counted();
       full();
       stir();
       input.focus();
@@ -614,8 +656,9 @@
     // Next with something still typed takes it along.
     form.addEventListener("submit", () => add(input.value));
 
+    const nodeAt = (target) => nodeOf.get(target.closest(".about-point, .about-source"));
     map.addEventListener("pointerover", (e) => {
-      const n = nodeOf.get(e.target);
+      const n = nodeAt(e.target);
       tip.hidden = !n;
       if (!n) return;
       const title = document.createElement("strong");
@@ -623,15 +666,15 @@
       title.textContent = n.info ? n.info.name : n.text;
       text.textContent = n.info ? n.info.description
         : n.el.classList.contains("waiting") ? "Finding its place…"
-        : n.field ? "" : "No source covers it closely";
+        : n.found ? "" : "No source covers it closely";
       tip.replaceChildren(title, ...(text.textContent ? [text] : []));
       const left = Math.min(n.x + 14, map.clientWidth - tip.offsetWidth);
       tip.style.transform = `translate(${left}px, ${n.y + 14}px)`;
     });
-    map.addEventListener("pointerout", (e) => { if (nodeOf.has(e.target)) tip.hidden = true; });
+    map.addEventListener("pointerout", (e) => { if (nodeAt(e.target)) tip.hidden = true; });
 
     // A change (stir) gives the map life, which runs out over SETTLE_MS: each point springs towards its place, drifting
-    // around it, and points too close push apart. As life runs out the drift fades and the spring gets heavier, so it
+    // around it, and points whose boxes overlap push apart. As life runs out the drift fades and the spring gets heavier, so it
     // all slows down rather than stops; at 0 nothing moves, and the loop stops until the next change.
     const SETTLE_MS = 2000;
     let calmAt = 0, moving = false;
@@ -647,23 +690,33 @@
       const life = (calmAt - now) / SETTLE_MS, damping = 0.5 + 0.32 * life, t = now / 1000;
       const all = [...interests, ...sources.values()];
       for (const n of all) {
-        const goal = toPx(n.at);
-        const gx = goal.x + Math.sin(t * 2.2 + n.phase) * 5 * life, gy = goal.y + Math.cos(t * 1.9 + n.phase) * 5 * life;
+        n.goal = goal(n);
+        const gx = n.goal.x + Math.sin(t * 2.2 + n.phase) * 5 * life, gy = n.goal.y + Math.cos(t * 1.9 + n.phase) * 5 * life;
         n.vx = (n.vx + (gx - n.x) * 0.035) * damping;
         n.vy = (n.vy + (gy - n.y) * 0.035) * damping;
       }
       for (let i = 0; i < all.length; i++) {
         for (let j = i + 1; j < all.length; j++) {
-          const a = all[i], b = all[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
-          const room = (a.size + b.size) / 2 + 10;
-          if (d >= room) continue;
-          const push = ((room - d) / d) * 0.05;
-          a.vx -= dx * push; a.vy -= dy * push; b.vx += dx * push; b.vy += dy * push;
+          const a = all[i], b = all[j];
+          const ox = Math.min(a.x + a.box.r, b.x + b.box.r) - Math.max(a.x + a.box.l, b.x + b.box.l);
+          const oy = Math.min(a.y + a.box.b, b.y + b.box.b) - Math.max(a.y + a.box.t, b.y + b.box.t);
+          if (ox <= 0 || oy <= 0) continue;
+          // Out along the side that overlaps least.
+          if (oy < ox) {
+            const push = (Math.sign(b.y - a.y) || 1) * oy * 0.05;
+            a.vy -= push; b.vy += push;
+          } else {
+            const push = (Math.sign(b.x - a.x) || 1) * ox * 0.05;
+            a.vx -= push; b.vx += push;
+          }
         }
       }
+      const w = map.clientWidth, h = map.clientHeight;
       for (const n of all) {
-        if (REDUCED) Object.assign(n, toPx(n.at));
+        if (REDUCED) Object.assign(n, n.goal);
         else { n.x += n.vx; n.y += n.vy; }
+        n.x = Math.min(Math.max(n.x, -n.box.l), w - n.box.r);
+        n.y = Math.min(Math.max(n.y, -n.box.t), h - n.box.b);
         n.el.style.transform = `translate(${n.x}px, ${n.y}px)`;
       }
       for (const item of interests) {
@@ -676,6 +729,7 @@
       requestAnimationFrame(frame);
     }
 
+    counted();
     earlier.forEach(add);
     loadMap();
     stir();
