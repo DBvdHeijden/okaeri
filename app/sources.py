@@ -46,7 +46,7 @@ def _source(raw: dict) -> Source:
         raise ValueError(f"source {raw['id']!r} has unknown medium {raw['medium']!r}")
     if raw["language"] not in LANGUAGES:
         raise ValueError(f"source {raw['id']!r} has unknown language {raw['language']!r}")
-    return Source(**{**raw, "tags": tags})
+    return Source(**{**raw, "tags": tags, "sample": tuple(raw.get("sample", ()))})
 
 
 SOURCES: list[Source] = [_source(s) for s in json.loads((ROOT / "catalog" / "sources.json").read_text())]

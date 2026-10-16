@@ -125,9 +125,10 @@ def about_document(about: str) -> str:
 
 
 def source_document(source: Source) -> str:
-    # One-line descriptions are thin; its topics' descriptions say more about what it covers.
+    # One-line descriptions are thin; its topics' descriptions and latest titles say more about what it covers.
     topics = " ".join(TAG_DESCRIPTIONS[t] for t in source.tags)
-    return f"title: {source.name} | text: {source.description} {topics}".strip()
+    sample = "; ".join(source.sample)
+    return f"title: {source.name} | text: {source.description} {topics} {sample}".strip()
 
 
 def topic_document(topic: str) -> str:
