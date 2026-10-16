@@ -3,7 +3,7 @@
 おかえり ("welcome back"): a calm localhost homepage with the latest papers, blogs, forums and news in science and tech.
 It fetches the sources you pick in the background and gathers them on one page, in tabs you set up yourself.
 
-Each tab shows stories newest first, or recommended: a small embedding model on your machine learns from what you
+Each tab shows stories newest first, or recommended. For the recommended stories a small embedding model on your machine learns from what you
 open, like and hide, and puts the most relevant stories on top. Your reading history never leaves your device. 
 Your recommendation algorithm is yours, tune it however you'd like. 
 

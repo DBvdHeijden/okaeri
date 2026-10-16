@@ -480,9 +480,10 @@
     });
   }
 
-  // Onboarding step 3: your interests as points on a map of the fields. The server places each one
-  // (/onboarding/about/place: towards the fields it's nearest to) and names the sources nearest to it; those come out
-  // of it one by one and drift to their own places, a thread back to it. After each change, points spring towards their
+  // Onboarding step 3: your interests as points on a map. The server places each one (/onboarding/about/place:
+  // towards the fields it's nearest to, which aren't drawn) and names the sources nearest to it and the field most of
+  // them cover; the sources come out of it one by one and drift to their own places, a thread back to it, and the
+  // field shows beside it. After each change, points spring towards their
   // places, nudge each other apart and drift a little, slowing down until they stand still. Hover one to see what it
   // is. Without JS the step is plain inputs.
   function initAboutMap() {
@@ -501,12 +502,11 @@
     map.hidden = entry.hidden = false;
 
     let catalog = null;          // source id -> {name, description, x, y}, once the map is in
-    const labels = [];           // the fields: {name, x, y, el}
     const interests = [];        // {text, el, chip, field, at, lines: source id -> <line>, ...motion}
     const sources = new Map();   // id -> {info, el, from: the interests it came out of, ...motion}
     const nodeOf = new WeakMap(); // element -> its interest or source, for the tooltip
 
-    // The server's places are on a ring of 1; here the ring is an ellipse filling the map, the fields' names on it.
+    // The server's places are inside a ring of 1; here the ring is an ellipse filling the map.
     const toPx = ({ x, y }) => {
       const w = map.clientWidth, h = map.clientHeight;
       return { x: w / 2 + x * (w / 2 - 70), y: h / 2 + y * (h / 2 - 28) };
@@ -527,15 +527,8 @@
       if (!map.isConnected) return;
       if (!res.ok) return setTimeout(loadMap, res.status === 503 ? 3000 : 10000);
       note.hidden = true;
-      const { fields, sources: list } = await res.json();
+      const { sources: list } = await res.json();
       catalog = new Map(list.map((s) => [s.id, s]));
-      for (const field of fields) {
-        const el = document.createElement("span");
-        el.className = "about-label";
-        el.textContent = field.name;
-        map.append(el);
-        labels.push({ ...field, el });
-      }
       stir();
       interests.forEach(place);  // the ones you wrote while it loaded
     }
@@ -548,7 +541,7 @@
       const { x, y, field, sources: ids } = await res.json();
       Object.assign(item, { at: { x, y }, field });
       item.el.classList.remove("waiting");
-      light();
+      item.el.dataset.field = field ?? "";
       stir();
       ids.forEach((id, n) => setTimeout(() => sprout(item, id), 500 + n * 180));  // once it has nearly arrived
     }
@@ -563,11 +556,6 @@
       item.lines.set(id, line);
       stir();
     }
-
-    // Each interest lights up the name of the field it's nearest to.
-    const light = () => {
-      for (const label of labels) label.el.classList.toggle("lit", interests.some((i) => i.field === label.name));
-    };
 
     function add(text) {
       text = text.trim().slice(0, 100);
@@ -607,7 +595,6 @@
         source.el.classList.add("leaving");
         setTimeout(() => source.el.remove(), 300);
       }
-      light();
       full();
       stir();
       input.focus();
@@ -634,8 +621,10 @@
       const title = document.createElement("strong");
       const text = document.createElement("span");
       title.textContent = n.info ? n.info.name : n.text;
-      text.textContent = n.info ? n.info.description : n.field ? `Nearest field: ${n.field}` : "Finding its place…";
-      tip.replaceChildren(title, text);
+      text.textContent = n.info ? n.info.description
+        : n.el.classList.contains("waiting") ? "Finding its place…"
+        : n.field ? "" : "No source covers it closely";
+      tip.replaceChildren(title, ...(text.textContent ? [text] : []));
       const left = Math.min(n.x + 14, map.clientWidth - tip.offsetWidth);
       tip.style.transform = `translate(${left}px, ${n.y + 14}px)`;
     });
@@ -676,10 +665,6 @@
         if (REDUCED) Object.assign(n, toPx(n.at));
         else { n.x += n.vx; n.y += n.vy; }
         n.el.style.transform = `translate(${n.x}px, ${n.y}px)`;
-      }
-      for (const label of labels) {
-        const { x, y } = toPx(label);
-        label.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
       }
       for (const item of interests) {
         for (const [id, line] of item.lines) {

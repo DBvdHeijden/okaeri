@@ -17,6 +17,7 @@ class Source:
     site: str  # what we show
     language: str  # ISO 639-1 code of the feed's language, e.g. "en", "nl"
     description: str = ""
+    sample: tuple[str, ...] = ()  # its latest titles, from scripts/sample_sources.py
     fetcher: Fetcher = "rss"
     refresh_minutes: int = 30  # blogs; forums and news override, papers go slower
 

@@ -6,13 +6,13 @@
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>What do you like to read about?</h1>
-    <p class="date">Step 3 of 8 · A few words at a time: a topic, a question, a niche. Each lands near the fields it's about and brings the sources that cover it. Optional.</p>
+    <p class="date">Step 3 of 8 · A few words at a time: a topic, a question, a niche. Each brings the sources that cover it. Optional.</p>
   </div>
 </header>
 
 <form method="post" action="/onboarding/about" data-about-form>
-  {#- With JS (app.js: initAboutMap) the inputs below make way for a map: your interests as points among the fields,
-      their nearest sources coming out of them. Hover a point to see what it is. #}
+  {#- With JS (app.js: initAboutMap) the inputs below make way for a map: your interests as points, each with the
+      field its sources cover, their nearest sources coming out of them. Hover a point to see what it is. #}
   <div class="about-map" data-about-map data-max="{{ max_interests }}" hidden>
     <svg class="about-links" aria-hidden="true"></svg>
     <p class="about-wait" data-about-wait hidden>Getting the map ready. The first time, that takes a minute or two.</p>
