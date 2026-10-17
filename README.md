@@ -29,7 +29,7 @@ On Windows, in PowerShell:
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/DBvdHeijden/okaeri/main/install.ps1 | iex"
 ```
 
-It puts okaeri in `~/okaeri` (installing [uv](https://docs.astral.sh/uv/) first if you don't have it) and opens http://localhost:12362 in your browser, where you pick your sources. It runs in the background and starts whenever you log in; set it as your browser's homepage.
+It puts okaeri in `~/okaeri` (installing [uv](https://docs.astral.sh/uv/) first if you don't have it) and opens http://localhost:12362 in your browser, where you pick your sources. Set it as your browser's homepage.
 
 Prefer git? `git clone https://github.com/DBvdHeijden/okaeri.git && cd okaeri && uv run main.py install`.
 
@@ -43,29 +43,17 @@ The first time you open okaeri, you are walked through our onboarding sequence. 
 
 ![Onboarding: topics you type land on a map of fields, gathering their sources around them](.github/onboarding-step-3.gif)
 
-## Update
+## Commands
 
-The commands below run from the okaeri folder (`cd ~/okaeri`).
+Run these from the okaeri folder (`cd ~/okaeri`).
 
 ```sh
 uv run main.py update     # get the latest version, sync dependencies, restart
-```
-
-## Troubleshooting
-
-```sh
 uv run main.py status     # one screen with what's going on; share this when asking for help
 uv run main.py logs       # the last 50 lines of data/okaeri.log
 uv run main.py restart
+uv run main.py uninstall  # removes the background service, leaves your data; delete the folder to remove everything
 ```
-
-## Uninstall
-
-```sh
-uv run main.py uninstall
-```
-
-This removes the background service and leaves your data alone; delete the folder to remove everything.
 
 ## Your data
 
@@ -77,31 +65,11 @@ okaeri only goes online to fetch your feeds, download the embedding model from H
 
 The [catalog](catalog/sources.json) has about 90 sources in English and Dutch: papers, blogs, news and forums on AI, software, security, science, space, climate, world news, politics and sports. Think arXiv, Nature, Quanta, Hacker News, Simon Willison and Ars Technica.
 
-Pick sources on the Settings page (the gear). Adding your own feeds there is in progress; for now, add an entry to `catalog/sources.json` (one medium and up to two topic tags from `catalog/tags.json`) and send it as a pull request. You can also list source ids under `sources.enabled` in `settings.json`.
+Pick sources on the Settings page (the gear). Adding your own feeds there is in progress; for now, add one to `catalog/sources.json` and send it as a pull request ([how](CONTRIBUTING.md#common-changes)). You can also list source ids under `sources.enabled` in `settings.json`.
 
-## Embedding model
+## Recommendations
 
-New items are embedded locally with [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2) (downloaded on first use into `data/models/`, ~330 MB), licensed under the [Apache License 2.0](https://ai.google.dev/gemma/docs/gemma_4_license). Tabs set to “Recommended” rank by them: stories close to what you opened or liked go up, look-alikes of what you hid go down, and older stories fade. Each topic has its own taste: liking AI stories lifts AI, without sinking politics. [docs/ranking.md](docs/ranking.md) explains the whole score.
-
-## Development
-
-```sh
-uv run main.py                     # run in this terminal: http://127.0.0.1:12362
-OKAERI_RELOAD=1 uv run main.py     # auto-reload while editing
-OKAERI_FETCH=0 uv run main.py      # don't fetch feeds
-OKAERI_DB=/tmp/x.db uv run main.py # default: data/okaeri.db
-OKAERI_PORT=12363 uv run main.py   # another port; works for the service commands too
-uv run pytest
-```
-
-On first run you're sent to onboarding: pick fields and media, then sources, then tick a few sample stories you'd read (saved as seed events for ranking), then tune the ranking dials while the top 5 stories change with them, then set up tabs. Nothing is fetched until you pick sources.
-
-Embedding runs in a short-lived child process, `python -m app.embed`, so the server never holds the model in memory: the 270M text model, 8-bit ONNX from [onnx-community/embeddinggemma-2-ONNX](https://huggingface.co/onnx-community/embeddinggemma-2-ONNX), pinned to a revision, vectors cut to 256 dims and stored in SQLite. Try them out:
-
-```sh
-uv run scripts/similar.py "protein folding"   # feed items nearest to a search query
-uv run scripts/similar.py --item <id>         # nearest to an article; the id is the one in /r/<id>
-```
+Stories are embedded locally with [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2) (downloaded on first use into `data/models/`, ~330 MB), licensed under the [Apache License 2.0](https://ai.google.dev/gemma/docs/gemma_4_license). Tabs set to “Recommended” rank by them: stories close to what you opened or liked go up, look-alikes of what you hid go down, and older stories fade. Each topic has its own taste: liking AI stories lifts AI, without sinking politics. [docs/ranking.md](docs/ranking.md) explains the whole score.
 
 ## FAQ
 
@@ -113,4 +81,4 @@ uv run scripts/similar.py --item <id>         # nearest to an article; the id is
 
 okaeri is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0): use it, change it and share it. If you share a changed version, or run one for others as a service, you share its source under the same license.
 
-Contributions are (very!) welcome and are licensed under the same AGPL-3.0.
+Contributions are (very!) welcome and are licensed under the same AGPL-3.0. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
