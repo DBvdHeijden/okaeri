@@ -1,9 +1,11 @@
 """Ranking seam. Every article list shown to the user goes through rank().
 
-Latest is plain recency. Recommended adds up five signals, each scaled 0..1, with weights in Settings:
-how close a story is to what you opened or liked, how fresh it is, how many points and comments it has,
-a little chance, minus how close it is to what you hid. Onboarding learns the first four weights from
-your ratings (learn()); after that the weights are yours to tune. Chance is never learned.
+Latest is plain recency. Recommended scores a story from five signals, each scaled 0..1, with weights in Settings:
+what you'd like (how close it is to what you opened or liked, plus its points and comments, plus a little chance),
+times what you wouldn't (how close it is to what you hid), times how fresh it is. Multiplying keeps time in play
+for every story: an old one has to be much more relevant than a new one to beat it. Onboarding learns the like,
+hidden, fresh and popular weights from your ratings (learn()); after that the weights are yours to tune.
+Chance is never learned. docs/ranking.md walks through it.
 
 Closeness is a taste per topic: a story is compared with what you liked (or hid) in its own topics, and placed
 among the other stories in them. Liking AI lifts AI stories without sinking politics, and a topic you haven't
@@ -72,7 +74,9 @@ def explain(
     topics = topics | {a.key: tags_for(a) for a in articles}
     sig, nearest = signals(newest, [k for k in liked if k in vectors], [k for k in hidden if k in vectors], vectors, topics)
     w = settings["ranking"]
-    score = sum(w[name] * values for name, values in sig.items() if name != "hidden") - w["hidden"] * sig["hidden"]
+    wanted = w["like"] * sig["like"] + w["popular"] * sig["popular"] + CHANCE * w["random"] * sig["random"]
+    # Fresh 0.5 fades a story by half every half-life of its medium; 1 twice as fast, 0 not at all.
+    score = wanted * (1 - w["hidden"] * sig["hidden"]) * sig["fresh"] ** (2 * w["fresh"])
     rows = [Breakdown(*row) for row in zip(newest, *sig.values(), nearest, score)]
     return sorted(rows, key=lambda b: b.score, reverse=True)  # stable: equal scores stay newest first
 
@@ -88,6 +92,10 @@ def signals(
     sig = {"like": like, "hidden": dislike, "fresh": freshness(articles), "popular": popularity(articles), "random": chance(articles)}
     return sig, nearest
 
+
+# Chance only breaks near-ties: at full Surprise it counts a fifth of what a full Like does. Spread over 0..1
+# like the other signals, it used to decide much of the top of the page by itself.
+CHANCE = 0.2
 
 # Ratings before the learned weights count for half of what the ratings say: a few clicks steer, not swing.
 HALF_TRUST_AT = 5
@@ -175,10 +183,11 @@ def closeness(
 
 
 def freshness(articles: list[Article]) -> np.ndarray:
-    """1 when just published, 0 when the story is about to leave the homepage; news fades faster than blogs."""
+    """1 when just published, halving every half-life of the story's medium: news fades faster than blogs.
+    By real age rather than as a share of the time on the homepage, which kept a two-week-old blog post fresh."""
     now = datetime.now(UTC)
-    days = np.array([(now - a.published_at).total_seconds() / 86400 / MEDIA[medium_of(a)]["max_age_days"] for a in articles])
-    return np.clip(1 - days, 0, 1)
+    half_lives = np.array([(now - a.published_at).total_seconds() / 86400 / MEDIA[medium_of(a)]["half_life_days"] for a in articles])
+    return 0.5 ** np.clip(half_lives, 0, None)
 
 
 def chance(articles: list[Article]) -> np.ndarray:

@@ -81,7 +81,7 @@ Pick sources on the Settings page (the gear). Adding your own feeds there is in 
 
 ## Embedding model
 
-New items are embedded locally with [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2) (downloaded on first use into `data/models/`, ~330 MB), licensed under the [Apache License 2.0](https://ai.google.dev/gemma/docs/gemma_4_license). Tabs set to “Recommended” rank by them: stories close to what you opened or liked go up, look-alikes of what you hid go down. Each topic has its own taste: liking AI stories lifts AI, without sinking politics.
+New items are embedded locally with [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2) (downloaded on first use into `data/models/`, ~330 MB), licensed under the [Apache License 2.0](https://ai.google.dev/gemma/docs/gemma_4_license). Tabs set to “Recommended” rank by them: stories close to what you opened or liked go up, look-alikes of what you hid go down, and older stories fade. Each topic has its own taste: liking AI stories lifts AI, without sinking politics. [docs/ranking.md](docs/ranking.md) explains the whole score.
 
 ## Development
 

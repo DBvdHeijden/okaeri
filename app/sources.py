@@ -18,8 +18,9 @@ from app.models import Article, Source
 log = logging.getLogger("okaeri")
 
 _VOCAB = json.loads((ROOT / "catalog" / "tags.json").read_text(encoding="utf-8"))
-# label, description and max_age_days (how long a story stays on the homepage: news goes stale fast, blogs post
-# rarely). In order: when a story comes from several media, the first is shown and the others are "also on".
+# label, description, max_age_days (how long a story stays on the homepage: news goes stale fast, blogs post
+# rarely) and half_life_days (how fast Recommended lets it fade, see rank.freshness). In order: when a story comes
+# from several media, the first is shown and the others are "also on".
 MEDIA: dict[str, dict] = _VOCAB["media"]
 TOPICS: frozenset[str] = frozenset(_VOCAB["topics"])
 TAG_DESCRIPTIONS: dict[str, str] = _VOCAB["topics"]
