@@ -17,7 +17,7 @@ from app.models import Article, Source
 
 log = logging.getLogger("okaeri")
 
-_VOCAB = json.loads((ROOT / "catalog" / "tags.json").read_text())
+_VOCAB = json.loads((ROOT / "catalog" / "tags.json").read_text(encoding="utf-8"))
 # label, description and max_age_days (how long a story stays on the homepage: news goes stale fast, blogs post
 # rarely). In order: when a story comes from several media, the first is shown and the others are "also on".
 MEDIA: dict[str, dict] = _VOCAB["media"]
@@ -49,7 +49,7 @@ def _source(raw: dict) -> Source:
     return Source(**{**raw, "tags": tags, "sample": tuple(raw.get("sample", ()))})
 
 
-SOURCES: list[Source] = [_source(s) for s in json.loads((ROOT / "catalog" / "sources.json").read_text())]
+SOURCES: list[Source] = [_source(s) for s in json.loads((ROOT / "catalog" / "sources.json").read_text(encoding="utf-8"))]
 BY_ID: dict[str, Source] = {s.id: s for s in SOURCES}
 
 

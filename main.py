@@ -1,7 +1,7 @@
 """Run okaeri, or manage it as a background service that starts at login.
 
     uv run main.py              # run the server in this terminal
-    uv run main.py install      # run it in the background: launchd on macOS, systemd on Linux
+    uv run main.py install      # run it in the background: launchd on macOS, systemd on Linux, Task Scheduler on Windows
     uv run main.py uninstall | restart | update | status | logs
 """
 
@@ -20,6 +20,7 @@ import webbrowser
 from collections import deque
 from datetime import datetime
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 import uvicorn
 
@@ -36,7 +37,7 @@ LOG = ROOT / "data" / "okaeri.log"
 VERSION = ROOT / "VERSION"  # the commit an install.sh download came from; git checkouts don't have it
 REPO = "DBvdHeijden/okaeri"
 MAX_LOG_BYTES = 5 * 2**20
-MAC, LINUX = sys.platform == "darwin", sys.platform.startswith("linux")
+MAC, LINUX, WINDOWS = sys.platform == "darwin", sys.platform.startswith("linux"), sys.platform == "win32"
 
 # One service per port, so a second checkout on another port doesn't replace the first.
 NAME = "okaeri" if PORT == DEFAULT_PORT else f"okaeri-{PORT}"
@@ -86,11 +87,29 @@ StandardError=append:{log}
 WantedBy=default.target
 """
 
+# pythonw: no console window. Task Scheduler's defaults would stop it on battery and after three days.
+TASK_TEMPLATE = """\
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo><Description>okaeri, a localhost homepage</Description></RegistrationInfo>
+  <Triggers><LogonTrigger><UserId>{user}</UserId></LogonTrigger></Triggers>
+  <Principals><Principal><UserId>{user}</UserId><LogonType>InteractiveToken</LogonType></Principal></Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure>
+  </Settings>
+  <Actions><Exec><Command>{pythonw}</Command><Arguments>main.py</Arguments><WorkingDirectory>{root}</WorkingDirectory></Exec></Actions>
+</Task>
+"""
+
 
 def rotate_log() -> None:
     if not LOG.exists() or LOG.stat().st_size < MAX_LOG_BYTES:
         return
-    started_by_service = os.path.samestat(os.fstat(sys.stdout.fileno()), LOG.stat())
+    started_by_service = sys.stdout is not None and os.path.samestat(os.fstat(sys.stdout.fileno()), LOG.stat())
     LOG.replace(LOG.with_name("okaeri.log.1"))
     if started_by_service:
         # launchd/systemd opened the log for us and would keep writing to the renamed file; switch to a fresh one.
@@ -100,8 +119,21 @@ def rotate_log() -> None:
         os.close(fd)
 
 
+def log_without_console() -> None:
+    """pythonw, how Task Scheduler starts us, has no stdout or stderr: send ours, and the embed child's, to the log."""
+    import ctypes
+    import msvcrt
+
+    LOG.parent.mkdir(exist_ok=True)
+    sys.stdout = sys.stderr = LOG.open("a", buffering=1, encoding="utf-8")
+    for std_handle in (-11, -12):  # STD_OUTPUT_HANDLE, STD_ERROR_HANDLE: what child processes inherit
+        ctypes.windll.kernel32.SetStdHandle(std_handle, msvcrt.get_osfhandle(sys.stdout.fileno()))
+
+
 def serve() -> None:
     rotate_log()
+    if sys.stdout is None:
+        log_without_console()
     logging.basicConfig(level=logging.INFO)
     uvicorn.run(
         "app.server:app",
@@ -140,10 +172,14 @@ def service_target() -> str:
 
 
 def installed() -> bool:
+    if WINDOWS:
+        return succeeds("schtasks", "/Query", "/TN", NAME)
     return (PLIST if MAC else UNIT).exists()
 
 
 def running() -> bool:
+    if WINDOWS:
+        return answering()  # schtasks reports the state in the system's language
     if MAC:
         return "state = running" in subprocess.run(["launchctl", "print", service_target()], capture_output=True, text=True).stdout
     return succeeds("systemctl", "--user", "is-active", "--quiet", NAME)
@@ -167,6 +203,9 @@ def unregister() -> None:
     if MAC:
         succeeds("launchctl", "bootout", service_target())
         wait_for(lambda: not succeeds("launchctl", "print", service_target()), 10)  # bootout finishes asynchronously
+    elif WINDOWS:
+        stop_task()
+        succeeds("schtasks", "/Delete", "/TN", NAME, "/F")
     else:
         succeeds("systemctl", "--user", "disable", "--now", NAME)
 
@@ -179,6 +218,17 @@ def require_installed() -> None:
 def find_uv() -> str | None:
     # `uv run` sets $UV, which works even before a fresh uv install is on the PATH.
     return os.environ.get("UV") or shutil.which("uv")
+
+
+def register_task() -> None:
+    user = f"{os.environ['USERDOMAIN']}\\{os.environ['USERNAME']}"
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    task = TASK_TEMPLATE.format(user=escape(user), pythonw=escape(str(pythonw)), root=escape(str(ROOT)))
+    with tempfile.TemporaryDirectory() as tmp:
+        xml = Path(tmp) / "task.xml"
+        xml.write_text(task, encoding="utf-16")
+        run("schtasks", "/Create", "/TN", NAME, "/XML", str(xml), "/F")
+    run("schtasks", "/Run", "/TN", NAME)
 
 
 def version() -> str:
@@ -238,8 +288,11 @@ def local_time(iso: str) -> str:
 
 
 def install() -> None:
-    if not (MAC or LINUX):
+    if not (MAC or LINUX or WINDOWS):
         sys.exit(f"Installing as a service isn't supported on {sys.platform} yet. Run it in a terminal instead: uv run main.py")
+    if WINDOWS and PORT != DEFAULT_PORT:
+        # A scheduled task can't set environment variables, so it would start on the default port.
+        sys.exit(f"On Windows the service only runs on port {DEFAULT_PORT} for now. Remove OKAERI_PORT and install again.")
     uv = find_uv()
     if not uv:
         sys.exit("Can't find uv on your PATH. Install it from https://docs.astral.sh/uv/")
@@ -257,6 +310,8 @@ def install() -> None:
         PLIST.parent.mkdir(parents=True, exist_ok=True)
         PLIST.write_text(PLIST_TEMPLATE.format(**values))
         run("launchctl", "bootstrap", f"gui/{os.getuid()}", str(PLIST))
+    elif WINDOWS:
+        register_task()
     else:
         UNIT.parent.mkdir(parents=True, exist_ok=True)
         UNIT.write_text(UNIT_TEMPLATE.format(**values))
@@ -267,26 +322,33 @@ def install() -> None:
     print(f"okaeri is running at {URL} and starts whenever you log in.")
     print("Pick your sources there. Tip: set it as your browser's homepage or new tab page.")
     # Over SSH there's no screen, and webbrowser would start a text browser in this terminal instead.
-    if MAC or os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+    if MAC or WINDOWS or os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
         webbrowser.open(URL)
 
 
 def uninstall() -> None:
     require_installed()
     unregister()
-    (PLIST if MAC else UNIT).unlink()
+    if not WINDOWS:
+        (PLIST if MAC else UNIT).unlink()
     if LINUX:
         run("systemctl", "--user", "daemon-reload")
     data = ROOT / "data"
     print("Uninstalled the service.")
     print(f"Your data is still there: {data} (database with your reading history, the model, the log) and settings.json.")
-    print(f"To delete it too: rm -rf {data} {ROOT / 'settings.json'}")
+    if WINDOWS:
+        print(f"To delete it too, delete that folder and {ROOT / 'settings.json'}")
+    else:
+        print(f"To delete it too: rm -rf {data} {ROOT / 'settings.json'}")
 
 
 def restart() -> None:
     require_installed()
     if MAC:
         run("launchctl", "kickstart", "-k", service_target())
+    elif WINDOWS:
+        stop_task()
+        run("schtasks", "/Run", "/TN", NAME)
     else:
         run("systemctl", "--user", "restart", NAME)
     if not wait_for(answering, 30):
@@ -294,7 +356,14 @@ def restart() -> None:
     print(f"Restarted; okaeri is running at {URL}")
 
 
+def stop_task() -> None:
+    succeeds("schtasks", "/End", "/TN", NAME)
+    wait_for(lambda: not port_in_use(), 10)
+
+
 def update() -> None:
+    if WINDOWS and installed():
+        stop_task()  # Windows can't replace files in .venv while the service has them open
     if VERSION.exists():
         download_latest()
     else:
@@ -309,7 +378,7 @@ def update() -> None:
 def logs() -> None:
     if not LOG.exists():
         sys.exit(f"No log yet at {LOG}")
-    with LOG.open(errors="replace") as f:
+    with LOG.open(encoding="utf-8", errors="replace") as f:
         print("".join(deque(f, 50)), end="")
 
 
