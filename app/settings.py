@@ -11,7 +11,7 @@ from app.sources import BY_ID, MEDIA, TOPICS, known_media, known_sources, known_
 log = logging.getLogger("okaeri")
 
 PATH = ROOT / "settings.json"
-EXAMPLE = ROOT / "settings.example.json"
+DEFAULTS = ROOT / "app" / "defaults.json"
 MAX_TABS = 6  # custom tabs, besides All and History
 MAX_INTERESTS = 12  # what you'd like to read about, onboarding step 3
 # History is chronological by design; every other tab sorts by "latest" or "recommended".
@@ -21,9 +21,9 @@ HISTORY_TAB = {"name": "History", "slug": "history", "media": (), "topics": (), 
 
 def load() -> dict:
     if not PATH.exists():
-        shutil.copy(EXAMPLE, PATH)
+        shutil.copy(DEFAULTS, PATH)
     # settings.json overrides the defaults key by key, so new settings reach existing users.
-    defaults, own = json.loads(EXAMPLE.read_text(encoding="utf-8")), upgrade(json.loads(PATH.read_text(encoding="utf-8")))
+    defaults, own = json.loads(DEFAULTS.read_text(encoding="utf-8")), upgrade(json.loads(PATH.read_text(encoding="utf-8")))
     return defaults | own | {"ranking": defaults["ranking"] | own.get("ranking", {})}
 
 
@@ -40,7 +40,7 @@ def upgrade(settings: dict) -> dict:
 
 
 def reset() -> None:
-    shutil.copy(EXAMPLE, PATH)
+    shutil.copy(DEFAULTS, PATH)
 
 
 def save(settings: dict) -> None:
@@ -177,7 +177,7 @@ def set_sort(tab_slug: str, sort: str) -> bool:
 def start_tabs(topics: list[str]) -> None:
     """Onboarding: a tab for each field you picked comes first, then the example's tabs that aren't one of those. An
     example tab of just that field lends its name ("AI" rather than "Ai")."""
-    examples = [t for t in json.loads(EXAMPLE.read_text(encoding="utf-8"))["tabs"] if "builtin" not in t]
+    examples = [t for t in json.loads(DEFAULTS.read_text(encoding="utf-8"))["tabs"] if "builtin" not in t]
     names = {tuple(t.get("topics", [])): t["name"] for t in examples if not t.get("media") and not t.get("sources")}
     fields = [{"name": names.get((t,), t.capitalize()), "topics": [t]} for t in topics]
     rest = [t for t in examples if not any(f["name"] == t["name"] for f in fields)]
