@@ -1,6 +1,7 @@
 (() => {
   const root = document.documentElement;
   const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const EASE = "cubic-bezier(0.2, 0.7, 0.2, 1)";  // style.css's --ease-out
 
   // Theme: explicit choice overrides prefers-color-scheme.
   const currentTheme = () =>
@@ -32,6 +33,7 @@
         ask.hidden = on;
         sure.hidden = !on;
         (on ? sure.querySelector("[type=submit]") : ask).focus();
+        if (!REDUCED) (on ? sure : ask).animate([{ opacity: 0 }, {}], { duration: 160, easing: "ease-out" });
       };
       ask.addEventListener("click", (e) => { e.preventDefault(); asking(true); });
       box.querySelector("[data-cancel]").addEventListener("click", () => asking(false));
@@ -114,6 +116,11 @@
     fetch(form.action, { method: "POST", body, redirect: "manual" })
       .then((r) => { if (!r.ok && r.type !== "opaqueredirect") revert(); }, revert);
 
+  // Something on its way out, by default as rows leave (.leaving in style.css). Resolves once it's gone from view.
+  const fadeOut = async (el, to = { opacity: 0, transform: "translateY(-3px)" }, ms = 120) => {
+    if (!REDUCED) await el.animate([{}, to], { duration: ms, easing: "ease-in", fill: "forwards" }).finished;
+  };
+
   // Hide: the story fades out and the ones below move up into its place; History › Hidden brings it back.
   // If the save fails, reload to show the feed as it really is.
   document.addEventListener("submit", async (e) => {
@@ -121,7 +128,7 @@
     e.preventDefault();
     const row = e.target.closest(".row");
     save(e.target, null, () => location.reload());
-    if (!REDUCED) await row.animate([{}, { opacity: 0 }], { duration: 120, easing: "ease-in", fill: "forwards" }).finished;
+    await fadeOut(row);
     if (paging) paging.remove(row);
     else row.remove();
   });
@@ -153,6 +160,7 @@
     const row = e.target.closest(".rate-row");
     const rating = e.submitter.value;
     for (const btn of e.target.querySelectorAll("button")) btn.disabled = true;  // one rating per story
+    if (!REDUCED) row.animate([{}, { opacity: 0.5 }], { duration: 120, fill: "forwards" });  // taken, while the next one comes
     // Wait for the save: the next story is picked by what this rating just taught.
     const saved = save(e.target, new URLSearchParams({ rating }), () => location.reload());
 
@@ -174,11 +182,15 @@
     });
     await saved;
     const res = await fetch(`/onboarding/sample/next?${query}`).catch(() => null);
-    if (res?.status !== 200) return row.remove();  // nothing left to show
+    if (res?.status !== 200) {  // nothing left to show: the ones below move up
+      await fadeOut(row);
+      return reflow([...row.parentElement.children].filter((r) => r !== row), () => row.remove());
+    }
     const template = document.createElement("template");
     template.innerHTML = (await res.text()).trim();
     const next = template.content.firstElementChild;
     if (!REDUCED) next.classList.add("entering");
+    await fadeOut(row);
     row.replaceWith(next);
   });
 
@@ -310,12 +322,20 @@
     });
   }
 
-  // Switching tabs or views (Latest / Recommended, Opened / Liked / Hidden), or onboarding's fields, goes like turning
-  // a page: the rows leave first, and the new page's rows load in as usual. Ctrl/Cmd-click etc. still open a new tab.
+  // Switching tabs or views (Latest / Recommended, Opened / Liked / Hidden), or onboarding's fields and "Show others"
+  // (data-turn), goes like turning a page: the rows leave first, and the new page's rows load in as usual.
+  // Ctrl/Cmd-click etc. still open a new tab.
   document.addEventListener("click", async (e) => {
-    const link = e.target.closest(".tabs a, .view-switch a");
+    const link = e.target.closest(".tabs a, .view-switch a, a[data-turn]");
     if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
+    // The one you clicked lights up at once; data-was marks the old one, for when you come back to this page.
+    const current = link.parentElement.querySelector("[aria-current]");
+    if (current && current !== link) {
+      current.removeAttribute("aria-current");
+      current.dataset.was = "";
+      link.setAttribute("aria-current", "page");
+    }
     await leaveRows();
     Turbo.visit(link.href);
   });
@@ -332,6 +352,11 @@
   const unleave = () => {
     for (const row of document.querySelectorAll(".row.leaving, .rate-row.leaving")) row.classList.remove("leaving");
     for (const form of document.querySelectorAll(".view-switch[data-left]")) delete form.dataset.left;
+    for (const was of document.querySelectorAll("[data-was]")) {
+      was.parentElement.querySelector("[aria-current]")?.removeAttribute("aria-current");
+      was.setAttribute("aria-current", "page");
+      delete was.dataset.was;
+    }
   };
   addEventListener("pageshow", (e) => { if (e.persisted) unleave(); });
   document.addEventListener("keydown", (e) => {
@@ -366,9 +391,34 @@
     const shut = { height: "0px", paddingTop: "0px", paddingBottom: "0px", opacity: 0 };
     const full = { height: `${el.offsetHeight}px`, paddingTop, paddingBottom, opacity: 1 };
     el.style.overflow = "hidden";
-    const animation = el.animate(open ? [shut, full] : [full, shut], { duration: 220, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" });
+    const animation = el.animate(open ? [shut, full] : [full, shut], { duration: 220, easing: EASE });
     return animation.finished.then(() => { el.style.overflow = ""; done(); }, () => {});
   };
+
+  // Folds (<details>) open and close by height too, like slide(). Closing keeps it open until it's shut, marked
+  // data-closing; a click halfway turns it round from where it got to.
+  const isOpen = (fold) => fold.open && !("closing" in fold.dataset);
+  const toggleFold = (fold, open) => {
+    if (REDUCED) return void (fold.open = open);
+    const from = fold.offsetHeight;
+    for (const running of fold.getAnimations()) running.cancel();
+    fold.toggleAttribute("data-closing", !open);
+    fold.open = true;
+    const shut = fold.querySelector("summary").offsetHeight + fold.offsetHeight - fold.clientHeight;  // and its border
+    const to = open ? fold.offsetHeight : shut;
+    fold.style.overflow = "hidden";
+    fold.animate({ height: [`${from}px`, `${to}px`] }, { duration: 220, easing: EASE }).finished.then(() => {
+      fold.style.overflow = "";
+      fold.open = open;
+      delete fold.dataset.closing;
+    }, () => {});
+  };
+  document.addEventListener("click", (e) => {
+    const summary = e.target.closest(".fold > summary, .tab-sources > summary");
+    if (!summary) return;
+    e.preventDefault();
+    toggleFold(summary.parentElement, !isOpen(summary.parentElement));
+  });
 
   // Makes a change to a list (change()), then glides each item that moved from where it was, and fades in the ones
   // that are new or came back (FLIP: measure, change, measure again, animate the difference). Items that go, just go.
@@ -382,7 +432,7 @@
       if (!before[i]) return el.animate([{ opacity: 0, transform: "scale(0.96)" }, {}], { duration: 180, easing: "ease-out" });
       const now = el.getBoundingClientRect();
       const dx = before[i].left - now.left, dy = before[i].top - now.top;
-      if (dx || dy) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, {}], { duration: 220, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" });
+      if (dx || dy) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, {}], { duration: 220, easing: EASE });
     });
   };
 
@@ -552,10 +602,12 @@
 
     async function loadMap() {
       const note = map.querySelector("[data-about-wait]");
+      if (note.hidden && !REDUCED) note.animate([{ opacity: 0 }, {}], { duration: 300, easing: "ease-out" });
       note.hidden = false;  // the first time it can take a while: the model downloads, then reads the catalog
       const res = await fetch("/onboarding/about/map");
       if (!map.isConnected) return;
       if (!res.ok) return setTimeout(loadMap, res.status === 503 ? 3000 : 10000);
+      await fadeOut(note, { opacity: 0 }, 200);
       note.hidden = true;
       const { sources: list } = await res.json();
       catalog = new Map(list.map((s) => [s.id, s]));
@@ -566,7 +618,7 @@
     async function place(item) {
       if (!catalog) return;  // loadMap places it once the map is in
       const res = await fetch("/onboarding/about/place", { method: "POST", body: new URLSearchParams({ text: item.text }) });
-      if (!item.el.isConnected) return;  // removed meanwhile
+      if (!map.isConnected || !interests.includes(item)) return;  // removed meanwhile
       if (!res.ok) return setTimeout(() => place(item), 3000);
       const { x, y, sources: matches } = await res.json();
       Object.assign(item, {
@@ -579,7 +631,7 @@
     }
 
     function sprout(item, id) {
-      if (!item.el.isConnected) return;
+      if (!map.isConnected || !interests.includes(item)) return;
       if (!sources.has(id)) sources.set(id, Object.assign(node("about-source", item), { id, info: catalog.get(id), from: new Set() }));
       const source = sources.get(id);
       source.from.add(item);
@@ -609,10 +661,11 @@
       const remove = Object.assign(document.createElement("button"), { type: "button", className: "chip-btn", textContent: `${text} ×` });
       remove.setAttribute("aria-label", `Remove ${text}`);
       remove.addEventListener("click", () => drop(item, chip, value));
-      remove.addEventListener("pointerenter", () => item.el.classList.add("hot"));
-      remove.addEventListener("pointerleave", () => item.el.classList.remove("hot"));
+      remove.addEventListener("pointerenter", () => focus(item));
+      remove.addEventListener("pointerleave", () => focus(null));
       chip.append(remove);
       chips.append(chip);
+      if (!REDUCED) chip.animate([{ opacity: 0, transform: "scale(0.9)" }, {}], { duration: 200, easing: EASE });
       interests.push(item);
       full();
       stir();
@@ -621,11 +674,14 @@
 
     function drop(item, chip, value) {
       interests.splice(interests.indexOf(item), 1);
-      item.el.remove();
-      chip.remove();
+      fadeOut(item.el, { opacity: 0, scale: 0 }, 200).then(() => item.el.remove());
+      chip.inert = true;  // no second click while it goes
+      focus(null);  // it was under the pointer, and inert won't say when that ends
+      const others = [...chips.children].filter((c) => c !== chip);
+      fadeOut(chip, { opacity: 0, transform: "scale(0.9)" }).then(() => reflow(others, () => chip.remove()));
       value.remove();
       for (const [id, line] of item.lines) {
-        line.remove();
+        fadeOut(line, { opacity: 0 }, 200).then(() => line.remove());
         const source = sources.get(id);
         source.from.delete(item);
         if (source.from.size) {
@@ -657,10 +713,28 @@
     form.addEventListener("submit", () => add(input.value));
 
     const nodeAt = (target) => nodeOf.get(target.closest(".about-point, .about-source"));
+    // Lights a point, its threads and the points at their other ends (style.css: .lit), or nothing (null).
+    // An interest lights all its sources; a source lights the interests it came out of.
+    function focus(n) {
+      map.classList.toggle("focused", !!n);
+      for (const el of map.querySelectorAll(".lit")) el.classList.remove("lit");
+      if (!n) return;
+      for (const item of n.from ? n.from : [n]) {
+        item.el.classList.add("lit");
+        for (const [id, line] of item.lines) {
+          if (n.from && id !== n.id) continue;
+          line.classList.add("lit");
+          sources.get(id).el.classList.add("lit");
+        }
+      }
+    }
     map.addEventListener("pointerover", (e) => {
       const n = nodeAt(e.target);
+      const appearing = tip.hidden && n;
       tip.hidden = !n;
+      focus(n ?? null);
       if (!n) return;
+      if (appearing && !REDUCED) tip.animate([{ opacity: 0 }, {}], { duration: 140, easing: "ease-out" });
       const title = document.createElement("strong");
       const text = document.createElement("span");
       title.textContent = n.info ? n.info.name : n.text;
@@ -671,13 +745,21 @@
       const left = Math.min(n.x + 14, map.clientWidth - tip.offsetWidth);
       tip.style.transform = `translate(${left}px, ${n.y + 14}px)`;
     });
-    map.addEventListener("pointerout", (e) => { if (nodeAt(e.target)) tip.hidden = true; });
+    map.addEventListener("pointerout", (e) => {
+      if (!nodeAt(e.target)) return;
+      tip.hidden = true;
+      focus(null);
+    });
 
     // A change (stir) gives the map life, which runs out over SETTLE_MS: each point springs towards its place, drifting
     // around it, and points whose boxes overlap push apart. As life runs out the drift fades and the spring gets heavier, so it
-    // all slows down rather than stops; at 0 nothing moves, and the loop stops until the next change.
+    // all slows down rather than stops; at 0 the forces rest until the next change.
+    // At rest the map still breathes: each point wanders slowly around where it settled, a few px at most, on a path
+    // of its own. Only what's drawn moves, not the point itself, so nothing pushes back and it can't jitter. The
+    // wander fades in once the map is still (calm, 0..1), and out again while it settles.
     const SETTLE_MS = 2000;
-    let calmAt = 0, moving = false;
+    const WANDER_PX = { interest: 1.5, source: 2.5 };  // sources, small and further out, a little more
+    let calmAt = 0, moving = false, calm = 0;
     function stir() {
       calmAt = performance.now() + SETTLE_MS;
       if (!moving) requestAnimationFrame(frame);
@@ -686,9 +768,31 @@
     new ResizeObserver(stir).observe(map);  // more chips below make it smaller: everything moves in
 
     function frame(now) {
-      if (!map.isConnected || now > calmAt) return void (moving = false);
-      const life = (calmAt - now) / SETTLE_MS, damping = 0.5 + 0.32 * life, t = now / 1000;
+      if (!map.isConnected || (REDUCED && now > calmAt)) return void (moving = false);
+      const life = Math.max(0, (calmAt - now) / SETTLE_MS), t = now / 1000;
       const all = [...interests, ...sources.values()];
+      if (life > 0) settle(all, life, t);
+      calm += ((life > 0 ? 0 : 1) - calm) * 0.02;
+      for (const n of all) {
+        const reach = calm * (n.from ? WANDER_PX.source : WANDER_PX.interest), pace = 0.5 + (n.phase % 1) * 0.3;
+        n.shownX = n.x + Math.sin(t * pace + n.phase) * reach;
+        n.shownY = n.y + Math.cos(t * pace * 0.8 + n.phase * 1.7) * reach;
+        // translate, not transform: scale (pop-in, hover) then works around the point itself, not the map's corner.
+        n.el.style.translate = `${n.shownX}px ${n.shownY}px`;
+      }
+      for (const item of interests) {
+        for (const [id, line] of item.lines) {
+          const s = sources.get(id);
+          line.setAttribute("x1", item.shownX); line.setAttribute("y1", item.shownY);
+          line.setAttribute("x2", s.shownX); line.setAttribute("y2", s.shownY);
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // One step of the forces: springs to their places, drift, and overlapping points pushing apart.
+    function settle(all, life, t) {
+      const damping = 0.5 + 0.32 * life;
       for (const n of all) {
         n.goal = goal(n);
         const gx = n.goal.x + Math.sin(t * 2.2 + n.phase) * 5 * life, gy = n.goal.y + Math.cos(t * 1.9 + n.phase) * 5 * life;
@@ -717,16 +821,7 @@
         else { n.x += n.vx; n.y += n.vy; }
         n.x = Math.min(Math.max(n.x, -n.box.l), w - n.box.r);
         n.y = Math.min(Math.max(n.y, -n.box.t), h - n.box.b);
-        n.el.style.transform = `translate(${n.x}px, ${n.y}px)`;
       }
-      for (const item of interests) {
-        for (const [id, line] of item.lines) {
-          const s = sources.get(id);
-          line.setAttribute("x1", item.x); line.setAttribute("y1", item.y);
-          line.setAttribute("x2", s.x); line.setAttribute("y2", s.y);
-        }
-      }
-      requestAnimationFrame(frame);
     }
 
     counted();
@@ -779,7 +874,8 @@
         }
         group.hidden = visible === 0;
         // Collapsible sections open while searching, so matches are visible; close again when cleared.
-        if (group.tagName === "DETAILS") group.open = q !== "" && visible > 0;
+        const open = q !== "" && visible > 0;
+        if (group.tagName === "DETAILS" && isOpen(group) !== open) toggleFold(group, open);
         any ||= visible > 0;
       }
       noResults.hidden = any;
@@ -789,9 +885,23 @@
     for (const btn of document.querySelectorAll("[data-not-yet]")) {
       btn.addEventListener("click", () => {
         notice.textContent = `${btn.textContent.trim()} isn't there yet, but it's coming.`;
+        if (!REDUCED) notice.animate([{ opacity: 0 }, {}], { duration: 160, easing: "ease-out" });
       });
     }
   }
+
+  // Which way the next page moves in (style.css): Back links go back, as does the browser's back button; another
+  // page goes forward; the same page again (tabs, views, a save) stays put and only crossfades.
+  let shownPath = location.pathname;
+  document.addEventListener("click", (e) => { if (e.target.closest("[data-back]")) root.dataset.nav = "back"; });
+  document.addEventListener("turbo:visit", (e) => {
+    if (new URL(e.detail.url).pathname === shownPath) root.dataset.nav = "still";
+    else root.dataset.nav ||= e.detail.action === "restore" ? "back" : "forward";
+  });
+  document.addEventListener("turbo:load", () => {
+    delete root.dataset.nav;
+    shownPath = location.pathname;
+  });
 
   // Set up what's on the page: now, and each time Turbo swaps in another (it doesn't run this script again).
   const init = () => {

@@ -33,11 +33,11 @@
 </div>
 <div class="footer-bar">
   <span class="footer-actions">
-    <a class="quiet-btn flush" href="/onboarding/sample?shuffle=1{% if field %}&amp;field={{ field }}{% endif %}">Show others</a>
+    <a class="quiet-btn flush" data-turn href="/onboarding/sample?shuffle=1{% if field %}&amp;field={{ field }}{% endif %}">Show others</a>
     <span class="tally" data-tally data-liked="{{ liked }}" data-disliked="{{ disliked }}" aria-live="polite">{{ liked }} liked · {{ disliked }} not for me</span>
   </span>
   <span class="footer-actions">
-    <a class="quiet-btn" href="/onboarding/sources">Back</a>
+    <a class="quiet-btn" href="/onboarding/sources" data-back>Back</a>
     <a class="primary-btn" href="/onboarding/tune">Next</a>
   </span>
 </div>
@@ -46,7 +46,7 @@
 <div class="footer-bar">
   <span></span>
   <span class="footer-actions">
-    <a class="quiet-btn" href="/onboarding/sources">Back</a>
+    <a class="quiet-btn" href="/onboarding/sources" data-back>Back</a>
     {% if pending %}<a class="quiet-btn" href="/onboarding/tune">Skip</a>{% else %}<a class="primary-btn" href="/onboarding/tune">Next</a>{% endif %}
   </span>
 </div>
