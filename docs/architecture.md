@@ -15,7 +15,7 @@ feeds ──fetch.py──▶ SQLite ◀──embed.py (child process)
 
 | File | Does |
 |---|---|
-| `main.py` | Starts the server, or installs it as a background service (launchd or systemd) |
+| `main.py` | Starts the server, or installs it as a background service (launchd on macOS, systemd on Linux, Task Scheduler on Windows) |
 | `app/server.py` | FastAPI routes: homepage, Settings, onboarding. Renders the Jinja templates |
 | `app/fetch.py` | Background loop: every minute, fetches the sources that are due, then embeds new stories |
 | `app/embed.py` | Turns stories into vectors with EmbeddingGemma, in a short-lived child process |
@@ -54,8 +54,9 @@ Everything lives on your machine:
 
 - **One process, one file.** Running `uv run main.py` is the whole install. Backup is copying `data/`.
 - **Embedding in a child process.** The model needs about 1.3 GB while it runs. In a child process, that memory is
-  released when it exits, instead of being held by the server all day. The model is EmbeddingGemma 2 (270M), as
-  8-bit ONNX from [onnx-community/embeddinggemma-2-ONNX](https://huggingface.co/onnx-community/embeddinggemma-2-ONNX),
+  released when it exits, instead of being held by the server all day. It also runs at low priority (`nice` on
+  macOS and Linux, idle priority on Windows), so it doesn't slow down whatever else you're doing. The model is
+  EmbeddingGemma 2 (270M), as 8-bit ONNX from [onnx-community/embeddinggemma-2-ONNX](https://huggingface.co/onnx-community/embeddinggemma-2-ONNX),
   pinned to a revision. Its vectors are cut to 256 dimensions and stored in SQLite.
 - **Events are only ever added, never edited.** Undoing a like adds an `unseed` event; nothing is deleted. Ranking
   replays the log, so your history stays complete and nothing else has to stay in sync with it.

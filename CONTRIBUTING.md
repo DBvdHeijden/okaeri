@@ -14,6 +14,10 @@ OKAERI_PORT=12363 uv run main.py   # another port; works for the service command
 uv run pytest
 ```
 
+On Windows, set variables in PowerShell first, like `$env:OKAERI_DB = "$env:TEMP\x.db"`. The background service there
+only runs on the default port. Windows support is new and lightly tested, so bug reports and fixes from Windows
+users are especially welcome.
+
 On first run you're sent to onboarding. Nothing is fetched until you pick sources.
 
 To see what the embeddings consider close:
@@ -42,9 +46,9 @@ Using an AI agent or vibe coding is fine. A lot of okaeri was built that way. Bu
 - **Read and understand every line.** If you can't explain why a line is there, it shouldn't be in the PR.
 - **Check that it works.** Run it, click through what changed, run the tests. Don't trust the agent saying it's done.
 - **Keep the diff to the task.** No sweeping refactors, renames or "cleanups" without a clear reason, stated in
-  the PR. A big diff with an unclear purpose gets closed, however tidy it looks.
+  the PR. 
 - **Point your agent at [AGENTS.md](AGENTS.md).** Most tools read it on their own. For Claude Code, put
-  `@AGENTS.md` in a `CLAUDE.md`.
+  `@AGENTS.md` in a `CLAUDE.md`. Updates to AGENTS.md are also allowed in PR's, it is a living document.
 
 ## Common changes
 

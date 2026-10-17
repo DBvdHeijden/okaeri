@@ -11,7 +11,7 @@ Your recommendation algorithm is yours, tune it however you'd like (either from 
 
 ## Requirements
 
-- macOS or Linux
+- macOS, Linux or Windows (Windows is new and not properly tested yet: [feedback welcome](https://github.com/DBvdHeijden/okaeri/issues)!)
 - ~500 MB disk: the Python environment and a local embedding model
 - Internet for the first run (and for fetching feeds, of course)
 
@@ -29,7 +29,7 @@ On Windows, in PowerShell:
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/DBvdHeijden/okaeri/main/install.ps1 | iex"
 ```
 
-It puts okaeri in `~/okaeri` (installing [uv](https://docs.astral.sh/uv/) first if you don't have it) and opens http://localhost:12362 in your browser, where you pick your sources. Set it as your browser's homepage.
+It puts okaeri in `~/okaeri`, or `%USERPROFILE%\okaeri` on Windows (installing [uv](https://docs.astral.sh/uv/) first if you don't have it), and opens http://localhost:12362 in your browser, where you pick your sources. Set it as your browser's homepage.
 
 Prefer git? `git clone https://github.com/DBvdHeijden/okaeri.git && cd okaeri && uv run main.py install`.
 
@@ -73,7 +73,7 @@ Stories are embedded locally with [EmbeddingGemma 2](https://huggingface.co/goog
 
 ## FAQ
 
-**Windows?** In progress; macOS and Linux for now.<br> Update: Windows support should be there, seems to work at first glance but not properly tested!
+**Windows?** Yes, since recently. It runs as a Task Scheduler task that starts when you log in. It seems to work, but hasn't been tested properly yet: if something breaks, please [open an issue](https://github.com/DBvdHeijden/okaeri/issues) with the output of `uv run main.py status`.<br>
 **Docker, or access from another device on my network?** Not yet: okaeri listens on `127.0.0.1`, so you can only open it on the computer it runs on. Once I find some time, maybe I'll get to this! <br>
 **Sync across devices?** No, each install keeps its own history on its own machine.
 
