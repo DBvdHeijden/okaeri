@@ -11,7 +11,7 @@
   </div>
 </header>
 
-<div class="tune-layout">
+<div class="tune-layout" style="--rows: {{ top_size }}">
   {#- Each turn is saved at once (POST /onboarding/weights) and the top stories come again, so Next needs no form. #}
   <div data-tune>{{ dials(weights, vertical=True) }}</div>
   {#- Over the stories, not the dials: there's one set of dials for everything, a field only narrows what you see. #}
@@ -35,7 +35,7 @@
 <div class="footer-bar">
   <span></span>
   <span class="footer-actions">
-    <a class="quiet-btn" href="/onboarding/sample">Back</a>
+    <a class="quiet-btn" href="/onboarding/sample" data-back>Back</a>
     <a class="primary-btn" href="/onboarding/tabs">Next</a>
   </span>
 </div>

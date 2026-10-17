@@ -11,12 +11,13 @@
   --muted: #6B6B66;
   --line: #E8E8E5;
   --chip: #EFEFEC;
-  --accent: #2457B8;
-  --warm: #CC6526;      /* the name, and the top of the figure */
+  --warm: #CC6526;      /* the name, the top of the figure, and what's highlighted */
   --warm-end: #D98A22;  /* where the figure's gradient ends */
+  --accent: var(--warm);  /* focus, hover, notes: follows the theme's --warm */
   --dim: rgb(0 0 0 / 0.06);  /* over the page, around a story's preview card */
   --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", "IBM Plex Sans JP", ui-monospace, "SF Mono", Menlo, monospace;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);  /* things arriving: quick, then settling */
   color-scheme: light;
 }
 
@@ -27,7 +28,6 @@
     --muted: #A2A29D;
     --line: #2C2C2A;
     --chip: #262624;
-    --accent: #86AEF2;
     --warm: #F2A066;
     --warm-end: #F5C26B;
     --dim: rgb(0 0 0 / 0.22);
@@ -41,7 +41,6 @@
   --muted: #A2A29D;
   --line: #2C2C2A;
   --chip: #262624;
-  --accent: #86AEF2;
   --warm: #F2A066;
   --warm-end: #F5C26B;
   --dim: rgb(0 0 0 / 0.22);
@@ -80,13 +79,32 @@ a { color: inherit; }
 
 button { font: inherit; color: inherit; }
 
-/* Hover states ease in rather than snap. */
+/* Hover states ease in rather than snap; buttons give a little when pressed. */
 :is(.icon-btn, .tabs a, .view-switch :is(a, button), .quiet-btn, .chip-btn, .link-btn, .title, .meta a, .date-link) {
-  transition: background-color 140ms ease, color 140ms ease;
+  transition: background-color 140ms ease, color 140ms ease, font-weight 140ms ease, transform 100ms ease;
 }
+:is(.icon-btn, .chip-btn):active { transform: scale(0.96); }
 
-/* Page changes (Turbo, see base.html): a quick crossfade. The theme switch has its own, further down. */
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: 160ms; }
+/* Page changes (Turbo, see base.html): the header, the top buttons and the footer stay where they are and change in
+   place, while the rest moves on: left for a step forward, right for a step back (app.js sets data-nav). Staying on
+   the same page (tabs, views, saving) only crossfades. The theme switch has its own, further down. */
+.masthead { view-transition-name: masthead; }
+.top-actions { view-transition-name: actions; }
+.footer-bar { view-transition-name: footer; }
+::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
+  animation-duration: 220ms;
+  animation-timing-function: var(--ease-out);
+}
+/* At their own size, not stretched to the other page's: onboarding is wider, and the top buttons vary in number. */
+::view-transition-old(masthead), ::view-transition-new(masthead),
+::view-transition-old(footer), ::view-transition-new(footer) { width: auto; }
+::view-transition-old(actions), ::view-transition-new(actions) { width: auto; left: auto; right: 0; }
+:root[data-nav="forward"] { --page-shift: 16px; }
+:root[data-nav="back"] { --page-shift: -16px; }
+::view-transition-old(root) { animation-name: page-out; }
+::view-transition-new(root) { animation-name: page-in; }
+@keyframes page-out { to { opacity: 0; translate: calc(var(--page-shift, 0px) * -1) 0; } }
+@keyframes page-in { from { opacity: 0; translate: var(--page-shift, 0px) 0; } }
 
 /* Shown by Turbo when a page takes a moment to come. */
 .turbo-progress-bar { height: 2px; background: var(--accent); }
@@ -311,15 +329,16 @@ h1 {
 .stat svg { vertical-align: -2px; margin-right: 3px; }  /* inline, so the dash before it stays on the line */
 .meta a:hover { color: var(--text); }
 
-.hide-btn {
+/* .row: to outrank the shared hover transition above, which would drop the fade. */
+.row .hide-btn {
   align-self: center;
   margin: -6px -8px -6px 0;
   opacity: 0;
-  transition: opacity 120ms ease, background-color 140ms ease, color 140ms ease;
+  transition: opacity 120ms ease, background-color 140ms ease, color 140ms ease, transform 100ms ease;
 }
 .row:hover .hide-btn,
 .row:focus-within .hide-btn { opacity: 1; }
-@media (hover: none) { .hide-btn { opacity: 1; } }
+@media (hover: none) { .row .hide-btn { opacity: 1; } }
 
 /* Hovering a story shows the start of it, as the feed gave it, in a card: to its right where there's room, else over
    the rows below (app.js sets data-beside, and data-above for stories low in the window, where the card opens upwards).
@@ -346,9 +365,10 @@ h1 {
     pointer-events: none;
     visibility: hidden;
     opacity: 0;
-    transition: opacity 120ms ease, visibility 0s 120ms;
+    translate: 0 4px;  /* it rises into place; one opening upwards comes down */
+    transition: opacity 120ms ease, translate 120ms ease, visibility 0s 120ms;
   }
-  [data-above] > .preview { top: auto; bottom: 100%; }
+  [data-above] > .preview { top: auto; bottom: 100%; translate: 0 -4px; }
   [data-beside] > .preview { top: 0; bottom: auto; left: calc(100% + 32px); right: auto; width: 320px; }
   [data-beside][data-above] > .preview { top: auto; bottom: 0; }
   /* The screen dims a little around the card, the story too: a layer over the story, under the card, whose shadow
@@ -375,7 +395,8 @@ h1 {
   :is(.row, .rate-row):is(:hover, :has(:is(.title, .source-name):focus-visible)) > .preview {
     visibility: visible;
     opacity: 1;
-    transition: opacity 160ms ease 350ms, visibility 0s 350ms;
+    translate: none;
+    transition: opacity 160ms ease 350ms, translate 220ms var(--ease-out) 350ms, visibility 0s 350ms;
   }
 }
 .preview p { margin: 0; overflow-wrap: anywhere; }
@@ -399,7 +420,7 @@ h1 {
 
 /* Rows load in top to bottom (--i is the row's position on the page, set by app.js), the feed's and onboarding's;
    a story that replaces one you rated has no --i, so it comes in at once. */
-:is(.row, .rate-row).entering { animation: row-in 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 25ms); }
+:is(.row, .rate-row).entering { animation: row-in 260ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 25ms); }
 :is(.row, .rate-row).leaving { animation: row-out 120ms ease-in both; }
 @keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
 @keyframes row-out { to { opacity: 0; transform: translateY(-3px); } }
@@ -462,6 +483,7 @@ h1 {
   font: inherit;
 }
 .search input::placeholder { color: var(--muted); }
+:is(.search input, .name-field input, .about-field input, .about-input, .tab-name) { transition: border-color 140ms ease; }
 .search input:focus-visible { border-color: var(--accent); outline-offset: 0; }
 
 /* Onboarding step 1: one field, like the search box but bigger. */
@@ -493,32 +515,40 @@ h1 {
 :is(.name-field, .about-field, .about-entry) input:focus-visible { border-color: var(--accent); outline-offset: 0; }
 
 /* Step 3's map (app.js: initAboutMap): your interests as warm points, their sources around them as small dots with
-   a thread back. Everything is placed by transform from the top left corner. */
+   a thread back. Everything is placed by translate from the top left corner. */
 /* It takes the height the rest of the step leaves, so more chips make it smaller instead of the page longer. */
 .about-map { position: relative; flex: 1 1 0; min-height: 180px; max-height: 560px; }
 .about-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.about-links line { stroke: color-mix(in srgb, var(--warm) 35%, transparent); stroke-width: 1; }
+.about-links line { stroke: color-mix(in srgb, var(--warm) 35%, transparent); stroke-width: 1; transition: stroke 200ms ease, opacity 200ms ease; }
 .about-point, .about-source, .about-tip { position: absolute; top: 0; left: 0; }
 .about-point, .about-source { border-radius: 50%; cursor: default; }
+/* A little more to hover than the dot itself: the small ones are hard to catch. */
+.about-point::before, .about-source::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
 .about-point {
   width: 14px; height: 14px; margin: -7px 0 0 -7px;
   background: var(--warm);
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--warm) 18%, transparent);
-  animation: point-in 400ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: point-in 400ms var(--ease-out) backwards;
+  transition: box-shadow 200ms ease, opacity 200ms ease;
 }
 /* point-in stays first: without it, losing .waiting would start it over and the point would shrink to nothing. */
 .about-point.waiting {
-  animation: point-in 400ms cubic-bezier(0.2, 0.7, 0.2, 1) both, point-wait 1.2s ease-in-out infinite alternate;
+  animation: point-in 400ms var(--ease-out) backwards, point-wait 1.2s ease-in-out infinite alternate;
 }
-.about-point.hot { box-shadow: 0 0 0 10px color-mix(in srgb, var(--warm) 28%, transparent); }
 .about-source {
   --size: 8px;
   width: var(--size); height: var(--size); margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
   background: color-mix(in srgb, var(--muted) 70%, var(--warm));
-  animation: point-in 300ms ease-out both;
-  transition: opacity 300ms ease;
+  animation: point-in 300ms ease-out backwards;
+  transition: opacity 300ms ease, scale 200ms var(--ease-out), background-color 200ms ease;
 }
 .about-source.leaving { opacity: 0; }
+/* Hovering a point (app.js: focus) lights it, its threads and the points at their other ends; the rest steps back. */
+.about-map.focused :is(.about-point, .about-source):not(.lit) { opacity: 0.35; }
+.about-map.focused .about-links line:not(.lit) { opacity: 0.25; }
+.about-links line.lit { stroke: color-mix(in srgb, var(--warm) 80%, transparent); }
+.about-point.lit { box-shadow: 0 0 0 10px color-mix(in srgb, var(--warm) 28%, transparent); }
+.about-source.lit { scale: 1.4; background: var(--warm); }
 @keyframes point-in { from { scale: 0; } }
 @keyframes point-wait { to { opacity: 0.35; } }
 .about-wait { position: absolute; inset: auto 0 0; margin: 0; text-align: center; color: var(--muted); font-size: 14px; }
@@ -593,11 +623,12 @@ h1 {
   border: solid var(--muted);
   border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
-  transition: transform 160ms ease;
+  transition: transform 220ms var(--ease-out);
 }
-.fold[open] > summary::after { transform: rotate(225deg); margin-bottom: -3px; }
+/* data-closing: app.js keeps a fold open while it slides shut; the arrow turns at once. */
+.fold[open]:not([data-closing]) > summary::after { transform: rotate(225deg); margin-bottom: -3px; }
 /* What a fold opens fades in, just under where it ends up. */
-.fold[open] > :not(summary), .tab-sources[open] > :not(summary) { animation: fold-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.fold[open] > :not(summary), .tab-sources[open] > :not(summary) { animation: fold-in 200ms var(--ease-out); }
 @keyframes fold-in { from { opacity: 0; transform: translateY(-4px); } }
 .fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
@@ -712,7 +743,9 @@ h1 {
 .tune-layout > [data-tune] { grid-area: dials; display: flex; flex-direction: column; }
 .tune-layout > [data-tune] > .sources { flex: 1; border-bottom: 1px solid var(--line); }
 .tune-fields { grid-area: fields; }
-.tune-stories { grid-area: stories; }
+/* Room for the full list (--rows stories, from the server) even when a field has fewer or none, so the dials
+   beside it keep their size. A story row: two lines of title, the meta line, its padding and border. */
+.tune-stories { grid-area: stories; min-height: calc(var(--rows) * (2 * 1.35em + 2px + 12.5px * 1.4 + 20px + 1px) + 1px); }
 @media (max-width: 760px) {
   .tune-layout { grid-template: "fields" "stories" "dials" / minmax(0, 1fr); gap: 24px; }
 }
@@ -791,9 +824,10 @@ h1 {
   cursor: pointer;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
           mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
-  transition: background 120ms ease;
+  transition: background 120ms ease, transform 100ms ease;
 }
 .check:checked { background: var(--text); }
+.source:active .check { transform: scale(0.85); }
 .source:hover .check:not(:checked) { background: var(--muted); }
 
 .source-text { transition: opacity 120ms ease; }
@@ -808,7 +842,7 @@ h1 {
 
 .footer-note { font: 13px var(--mono); color: var(--muted); }
 /* What a step still needs before Next: in the footer, beside the count. */
-.form-note { font: 13px var(--mono); color: var(--accent); animation: fold-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.form-note { font: 13px var(--mono); color: var(--accent); animation: fold-in 200ms var(--ease-out); }
 
 .footer-bar {
   position: sticky;
@@ -871,7 +905,10 @@ h1 {
 }
 
 /* Theme switch: a blind that drops down (to dark) or rolls up (to light).
-   A sliding mask with a 2px fade: reads as a hard edge, but anti-aliased so it doesn't step. */
+   A sliding mask with a 2px fade: reads as a hard edge, but anti-aliased so it doesn't step.
+   The header, top buttons and footer go under the blind with the rest, not in a page change's layers of their own. */
+
+:root[data-theme-transition] :is(.masthead, .top-actions, .footer-bar) { view-transition-name: none; }
 
 :root {
   --blind-edge: 2px;
@@ -913,5 +950,5 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
   :is(.row, .rate-row):is(.entering, .leaving), .fold[open] > :not(summary), .tab-sources[open] > :not(summary), .about-point, .about-source { animation: none; }
-  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; }
 }

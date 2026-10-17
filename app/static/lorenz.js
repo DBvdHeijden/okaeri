@@ -18,7 +18,9 @@ function startLorenz(canvas) {
   const TRAIL = 10000;        // points kept in the trail
   const BUCKETS = 40;        // age steps for the fade (alpha)
   const SPIN = 0.00006;      // slow rotation of the view around the z-axis, rad/frame
-  const MIN_WIDTH = 0.5, MAX_WIDTH = 2.2; // px, far side → near side
+  // px, far side → near side; the homepage's figure stands alone beside the feed, so it's drawn bolder.
+  const [MIN_WIDTH, MAX_WIDTH] = tally ? [0.5, 2.2] : [0.7, 3];
+  const PEAK_ALPHA = tally ? 0.55 : 0.65;  // the newest part of the trail
   const WIDTH_LEVELS = 7;
   const DEPTH_RANGE = 28;    // attractor spans about ±28 along the hidden axis
   const DRAW_EVERY = 2;      // draw every 2nd trail point: steps are only a few px apart
@@ -174,7 +176,7 @@ function startLorenz(canvas) {
     // Attractor spans roughly ±28 horizontally (any rotation) and 0..50 in z.
     // Paced sits in a square of its own, so it can fill it; the homepage leaves room in a tall side panel.
     // At its widest (face-on, as the view turns) it spans about 56 units, so 0.98 of the width never clips.
-    scale = tally ? Math.min((w * 0.98) / 56, (h * 0.9) / 50) : Math.min((w * 0.8) / 56, (h * 0.55) / 50);
+    scale = tally ? Math.min((w * 0.98) / 56, (h * 0.9) / 50) : Math.min((w * 0.9) / 56, (h * 0.63) / 50);
     cx = w / 2; cy = h / 2 + 25 * scale;
   }
   watch(new ResizeObserver(resize), canvas);
@@ -214,7 +216,7 @@ function startLorenz(canvas) {
         if (bucket >= 0) ctx.stroke();
         bucket = b; level = l;
         const t = (b + 1) / BUCKETS;
-        ctx.globalAlpha = 0.55 * t * t;
+        ctx.globalAlpha = PEAK_ALPHA * t * t;
         ctx.lineWidth = widthOf(l);
         ctx.beginPath();
         ctx.moveTo(px, py);

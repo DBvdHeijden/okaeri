@@ -660,7 +660,10 @@ def onboarding_tune(request: Request, field: str = ""):
     return templates.TemplateResponse(
         request,
         "onboarding_tune.html",
-        {"articles": top_stories(field), "weights": settings.weights(), "field": field, "fields": settings.interests()["topics"]},
+        {
+            "articles": top_stories(field), "weights": settings.weights(), "field": field,
+            "fields": settings.interests()["topics"], "top_size": TOP_SIZE,
+        },
     )
 
 
