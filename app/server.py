@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import random
-from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,8 +33,11 @@ HERE = Path(__file__).parent
 PAGE_SIZE = 100  # app.js splits these into viewport-sized pages
 SAMPLE_SIZE = 5
 TOP_SIZE = 5  # the stories onboarding shows while you tune the ranking
-SOURCES_PER_INTEREST = 3  # onboarding ticks the sources nearest to each interest you wrote
-MIN_MATCH = 0.67  # ...if at least this close: below it, a source isn't about it (unrelated ones score up to ~0.66)
+# A source is about an interest you wrote (onboarding brings it up and ticks it) if it's at least this close: below
+# it, it isn't (unrelated interests score up to ~0.66)...
+MIN_MATCH = 0.67
+NEAR_BEST = 0.07  # ...at most this much less close than the closest source: a broad one shouldn't bring its neighbours
+FIELDS_FROM = 2  # ...and in a field of the 2 closest, or in none (Hacker News): Dutch politics, not Dutch sports
 RING_PULL = 0.78  # step 3's map: how far toward its fields a point goes, the fields being on a ring of 1
 TEMPERATURE = 0.015  # how sharply a point goes to its nearest field rather than between several
 HISTORY_SIZE = 100
@@ -362,7 +364,7 @@ def onboarding_name_submit(name: Annotated[str, Form()] = ""):
 
 # Step 3: what you'd like to read about, in your own words, a few words each. Each becomes a point on a map, near
 # the fields it's about (they aren't drawn: a ring of names was a lot to take in), and the sources nearest to it come
-# out of it. Later steps tick the fields and sources nearest to them.
+# out of it and are listed beside it. Later steps tick the fields and sources nearest to them.
 
 @app.get("/onboarding/about", response_class=HTMLResponse)
 def onboarding_about(request: Request):
@@ -418,10 +420,7 @@ async def make_about_map() -> dict:
         ring = field_ring(topic_vectors)
         about_map.update(
             topics=topics, topic_vectors=topic_vectors, ring=ring, source_vectors=source_vectors,
-            sources=[
-                {"id": s.id, "name": s.name, "description": s.description, "x": x, "y": y}
-                for s, (x, y) in zip(SOURCES, place(source_vectors, topic_vectors, ring).tolist())
-            ],
+            sources=[{"id": s.id, "name": s.name, "description": s.description} for s in SOURCES],
         )
     return about_map
 
@@ -446,18 +445,27 @@ async def onboarding_about_map():
 
 @app.post("/onboarding/about/place")
 async def onboarding_about_place(text: Annotated[str, Form()]):
-    """Where one of your interests goes on the map, the sources nearest to it, and the field most of them cover."""
+    """Where one of your interests goes on the map, and the sources about it with how close each is."""
     if not model_downloaded():
         return waiting()
     m = await make_about_map()
     vector = (await vectors_for([about_document(text.strip()[:100])]))[0]
     (x, y), = place(vector[None], m["topic_vectors"], m["ring"]).tolist()
-    candidates = readable()
-    closeness = m["source_vectors"][candidates] @ vector
-    nearest = [SOURCES[candidates[i]] for i in np.argsort(-closeness)[:SOURCES_PER_INTEREST] if closeness[i] >= MIN_MATCH]
-    # The nearest source's field wins a tie. None without sources: then it isn't clearly about any field.
-    fields = Counter(t for s in nearest for t in s.tags).most_common(1)
-    return {"x": x, "y": y, "field": fields[0][0] if fields else None, "sources": [s.id for s in nearest]}
+    indexes = readable()
+    candidates = [SOURCES[i] for i in indexes]
+    closeness = m["source_vectors"][indexes] @ vector
+    return {
+        "x": x, "y": y,
+        "sources": [{"id": candidates[i].id, "closeness": float(closeness[i])} for i in related(closeness, candidates)],
+    }
+
+
+def related(closeness: np.ndarray, sources: list[Source]) -> list[int]:
+    """Indexes into `sources` (closeness has a score for each) of the ones about the interest, closest first."""
+    floor = max(MIN_MATCH, closeness.max() - NEAR_BEST)
+    close = [i for i in np.argsort(-closeness) if closeness[i] >= floor]
+    fields = {t for i in close[:FIELDS_FROM] for t in sources[i].tags}
+    return [i for i in close if not fields or not sources[i].tags or fields & set(sources[i].tags)]
 
 
 def about_scores(documents: dict[str, str]) -> dict[str, np.ndarray]:
@@ -470,11 +478,11 @@ def about_scores(documents: dict[str, str]) -> dict[str, np.ndarray]:
     return {i: np.array([v @ vectors[text_key(d)] for v in interests]) for i, d in documents.items() if text_key(d) in vectors}
 
 
-def nearest_each(scores: dict[str, np.ndarray], k: int, floor: float = -1) -> list[str]:
-    """The k ids nearest to each interest in turn, at least `floor` close, without repeats."""
+def nearest_each(scores: dict[str, np.ndarray], k: int) -> list[str]:
+    """The k ids nearest to each interest in turn, without repeats."""
     interests = len(next(iter(scores.values()), []))
     by_interest = (sorted(scores, key=lambda i: scores[i][n], reverse=True)[:k] for n in range(interests))
-    return list(dict.fromkeys(i for n, ids in enumerate(by_interest) for i in ids if scores[i][n] >= floor))
+    return list(dict.fromkeys(i for ids in by_interest for i in ids))
 
 
 @app.get("/onboarding/languages", response_class=HTMLResponse)
@@ -551,7 +559,7 @@ def onboarding_sources(request: Request):
     for s in offered:
         groups[next((t for t in interests["topics"] if t in s.tags), "general")].append(s)
     groups = {label: sources for label, sources in groups.items() if sources}
-    # The first time through, each interest you wrote ticks the sources nearest to it, and each fold its best one;
+    # The first time through, each interest you wrote ticks the sources about it (as in step 3), and each fold its best one;
     # in each fold, the nearest (to any of your interests) first. Without interests, all start ticked.
     selected, suggested = settings.enabled_sources(), False
     if not selected and (scores := about_scores({s.id: source_document(s) for s in offered})):
@@ -561,7 +569,10 @@ def onboarding_sources(request: Request):
             for label, sources in groups.items()
         }
         best_per_fold = [sources[0].id for sources in groups.values() if sources[0].id in scores]
-        selected = list(dict.fromkeys(nearest_each(scores, SOURCES_PER_INTEREST, MIN_MATCH) + best_per_fold))
+        scored = [s for s in offered if s.id in scores]
+        by_interest = np.array([scores[s.id] for s in scored]).T
+        about = [scored[i].id for closeness in by_interest for i in related(closeness, scored)]
+        selected = list(dict.fromkeys(about + best_per_fold))
         suggested = True
     selected = selected or [s.id for s in offered]
     groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items()}

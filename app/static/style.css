@@ -492,8 +492,8 @@ h1 {
 :is(.name-field, .about-field) input::placeholder { color: var(--muted); }
 :is(.name-field, .about-field, .about-entry) input:focus-visible { border-color: var(--accent); outline-offset: 0; }
 
-/* Step 3's map (app.js: initAboutMap): your interests as warm points, each with the field its sources cover, and
-   those sources as small dots with a thread back. Everything is placed by transform from the top left corner. */
+/* Step 3's map (app.js: initAboutMap): your interests as warm points, their sources around them as small dots with
+   a thread back. Everything is placed by transform from the top left corner. */
 /* It takes the height the rest of the step leaves, so more chips make it smaller instead of the page longer. */
 .about-map { position: relative; flex: 1 1 0; min-height: 180px; max-height: 560px; }
 .about-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
@@ -506,21 +506,14 @@ h1 {
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--warm) 18%, transparent);
   animation: point-in 400ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
-.about-point::after {
-  content: attr(data-field);
-  position: absolute;
-  left: 22px;
-  top: 50%;
-  translate: 0 -50%;
-  font: 13px var(--mono);
-  color: var(--warm);
-  white-space: nowrap;
-  pointer-events: none;
+/* point-in stays first: without it, losing .waiting would start it over and the point would shrink to nothing. */
+.about-point.waiting {
+  animation: point-in 400ms cubic-bezier(0.2, 0.7, 0.2, 1) both, point-wait 1.2s ease-in-out infinite alternate;
 }
-.about-point.waiting { animation: point-wait 1.2s ease-in-out infinite alternate; }
 .about-point.hot { box-shadow: 0 0 0 10px color-mix(in srgb, var(--warm) 28%, transparent); }
 .about-source {
-  width: 8px; height: 8px; margin: -4px 0 0 -4px;
+  --size: 8px;
+  width: var(--size); height: var(--size); margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
   background: color-mix(in srgb, var(--muted) 70%, var(--warm));
   animation: point-in 300ms ease-out both;
   transition: opacity 300ms ease;

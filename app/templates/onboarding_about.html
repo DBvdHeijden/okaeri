@@ -11,8 +11,8 @@
 </header>
 
 <form method="post" action="/onboarding/about" data-about-form>
-  {#- With JS (app.js: initAboutMap) the inputs below make way for a map: your interests as points, each with the
-      field its sources cover, their nearest sources coming out of them. Hover a point to see what it is. #}
+  {#- With JS (app.js: initAboutMap) the inputs below make way for a map: your interests as points, the sources about
+      them around them. Hover a point to see what it is. #}
   <div class="about-map" data-about-map data-max="{{ max_interests }}" hidden>
     <svg class="about-links" aria-hidden="true"></svg>
     <p class="about-wait" data-about-wait hidden>Getting the map ready. The first time, that takes a minute or two.</p>
@@ -34,7 +34,7 @@
   </fieldset>
 
   <div class="footer-bar">
-    <span></span>
+    <span data-about-count aria-live="polite"></span>
     <span class="footer-actions">
       <a class="quiet-btn" href="/onboarding/languages">Back</a>
       <button type="submit" class="primary-btn">Next</button>
