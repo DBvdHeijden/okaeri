@@ -105,7 +105,7 @@ uv run scripts/similar.py --item <id>         # nearest to an article; the id is
 
 ## FAQ
 
-**Windows?** In progress; macOS and Linux for now.<br>
+**Windows?** In progress; macOS and Linux for now.<br> Update: Windows support should be there, seems to work at first glance but not properly tested!
 **Docker, or access from another device on my network?** Not yet: okaeri listens on `127.0.0.1`, so you can only open it on the computer it runs on. Once I find some time, maybe I'll get to this! <br>
 **Sync across devices?** No, each install keeps its own history on its own machine.
 
