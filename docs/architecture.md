@@ -35,7 +35,7 @@ Everything lives on your machine:
   - `events`: every open, like, hide and undo.
   - `embeddings`: a vector per story (and per interest text), for each model.
 - **`settings.json`**: your sources, tabs, ranking dials and onboarding answers. Missing keys fall back to
-  `settings.example.json`.
+  `app/defaults.json`.
 - **`catalog/`**: the sources (`sources.json`) and the media, topics and languages (`tags.json`). They're in the
   repo, not in your data.
 
