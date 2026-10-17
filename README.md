@@ -3,9 +3,9 @@
 おかえり ("welcome back"): a calm localhost homepage with the latest papers, blogs, forums and news in science and tech.
 It fetches the sources you pick in the background and gathers them on one page, in tabs you set up yourself.
 
-Each tab shows stories newest first, or recommended. For the recommended stories a small embedding model on your machine learns from what you
-open, like and hide, and puts the most relevant stories on top. Your reading history never leaves your device. 
-Your recommendation algorithm is yours, tune it however you'd like. 
+Each tab shows stories newest first, or recommended. For the recommended stories a small embedding model on your machine runs in the background. 
+We register you clicks and hides, and have a simple algorithm for ranking the feed. Your reading history never leaves your device. 
+Your recommendation algorithm is yours, tune it however you'd like (either from the UI, or delve into the code). 
 
 ![The okaeri homepage: a list of today's stories, with a slowly turning Lorenz figure beside it](.github/main_page.png)
 
@@ -17,7 +17,7 @@ Your recommendation algorithm is yours, tune it however you'd like.
 
 ## Install
 
-Paste this into a terminal:
+Paste this into a terminal (or [read install.sh](install.sh) first):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/DBvdHeijden/okaeri/main/install.sh | sh
@@ -35,7 +35,7 @@ The first time, okaeri also downloads a language model (~330 MB) and indexes you
 
 The first time you open okaeri, you are walked through our onboarding sequence. This will take a few minutes, and set your homepage up for you. You say what you like to read about, pick sources, mark some stories you'd read, and arrange your tabs. Your answers give the recommendations a head start, and you can change sources, tabs and ranking later in Settings. Your preferences will be further tuned as you use okaeri.
 
-![Onboarding: topics you type land on a map of fields, near the ones they're about](.github/onboarding.png)
+![Onboarding: topics you type land on a map of fields, gathering their sources around them](.github/onboarding-step-3.gif)
 
 ## Update
 
@@ -65,9 +65,13 @@ This removes the background service and leaves your data alone; delete the folde
 
 Everything lives in the repo folder and is never committed: `data/` holds the database with your reading history, the embedding model and the log; `settings.json` holds your sources and tabs. It stays on your machine.
 
+okaeri only goes online to fetch your feeds, download the embedding model from Hugging Face once, and get the latest version from GitHub when you run `update` (installing also fetches uv and Python packages). No telemetry, no accounts.
+
 ## Sources
 
-Pick sources on the Settings page (the gear), or list their ids under `sources.enabled` in `settings.json`. To add a feed that isn't in the catalog, add an entry there (one medium and up to two topic tags from `catalog/tags.json`) and send it as a pull request.
+The [catalog](catalog/sources.json) has about 90 sources in English and Dutch: papers, blogs, news and forums on AI, software, security, science, space, climate, world news, politics and sports. Think arXiv, Nature, Quanta, Hacker News, Simon Willison and Ars Technica.
+
+Pick sources on the Settings page (the gear). Adding your own feeds there is in progress; for now, add an entry to `catalog/sources.json` (one medium and up to two topic tags from `catalog/tags.json`) and send it as a pull request. You can also list source ids under `sources.enabled` in `settings.json`.
 
 ## Embedding model
 
@@ -92,6 +96,12 @@ Embedding runs in a short-lived child process, `python -m app.embed`, so the ser
 uv run scripts/similar.py "protein folding"   # feed items nearest to a search query
 uv run scripts/similar.py --item <id>         # nearest to an article; the id is the one in /r/<id>
 ```
+
+## FAQ
+
+**Windows?** In progress; macOS and Linux for now.<br>
+**Docker, or access from another device on my network?** Not yet: okaeri listens on `127.0.0.1`, so you can only open it on the computer it runs on. Once I find some time, maybe I'll get to this! <br>
+**Sync across devices?** No, each install keeps its own history on its own machine.
 
 ## License
 
