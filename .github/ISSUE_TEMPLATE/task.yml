@@ -1,0 +1,25 @@
+name: Task
+description: Planned work, usually opened by maintainers. Ideas go to Discussions.
+body:
+  - type: textarea
+    attributes:
+      label: What
+      description: The change, in a few sentences.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Why
+      description: The problem it solves or what it enables.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: How
+      description: A suggested approach, the relevant files, and pitfalls to watch for.
+  - type: textarea
+    attributes:
+      label: Done when
+      description: How to check it works, such as what to test or look at.
+    validations:
+      required: true
