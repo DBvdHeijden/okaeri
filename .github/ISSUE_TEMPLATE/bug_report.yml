@@ -1,0 +1,28 @@
+name: Bug report
+description: Something in okaeri isn't working.
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: okaeri version or commit
+      placeholder: The version from `uv run main.py status`, or `git rev-parse --short HEAD`
+  - type: textarea
+    attributes:
+      label: Logs
+      description: The output of `uv run main.py logs`, run from the okaeri folder.
+      render: text
