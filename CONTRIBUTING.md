@@ -12,6 +12,7 @@ OKAERI_RELOAD=1 uv run main.py     # auto-reload while editing
 OKAERI_FETCH=0 uv run main.py      # don't fetch feeds
 OKAERI_PORT=12363 uv run main.py   # another port; works for the service commands too
 uv run pytest
+uv run pre-commit install         # once: lint and format on every commit
 ```
 
 On Windows, set variables in PowerShell first, like `$env:OKAERI_DB = "$env:TEMP\x.db"`. The background service there
@@ -62,4 +63,4 @@ Using an AI agent or vibe coding is fine. A lot of okaeri was built that way. Bu
 
 - Branch from `main`, and keep to one change per PR.
 - Say what changed and why. Add a screenshot if it's visible on the page.
-- Run `uv run pytest` before you push.
+- Run `uv run pytest` before you push. CI runs it and the pre-commit hooks on every PR.
