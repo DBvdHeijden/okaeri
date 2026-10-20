@@ -1,7 +1,7 @@
 """Try out the article embeddings: the feed items nearest to a query or to another article.
 
-    uv run scripts/similar.py "some query text"
-    uv run scripts/similar.py --item <id>    # the id from /r/<id>
+uv run scripts/similar.py "some query text"
+uv run scripts/similar.py --item <id>    # the id from /r/<id>
 """
 
 import argparse

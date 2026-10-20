@@ -50,7 +50,9 @@ def _source(raw: dict) -> Source:
     return Source(**{**raw, "tags": tags, "sample": tuple(raw.get("sample", ()))})
 
 
-SOURCES: list[Source] = [_source(s) for s in json.loads((ROOT / "catalog" / "sources.json").read_text(encoding="utf-8"))]
+SOURCES: list[Source] = [
+    _source(s) for s in json.loads((ROOT / "catalog" / "sources.json").read_text(encoding="utf-8"))
+]
 BY_ID: dict[str, Source] = {s.id: s for s in SOURCES}
 
 

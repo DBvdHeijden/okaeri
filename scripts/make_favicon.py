@@ -66,10 +66,7 @@ def project(points, size: float, pad: float):
     ou = (size - (max(us) - min(us)) * scale) / 2 - min(us) * scale
     ov = (size - (max(vs) - min(vs)) * scale) / 2 + max(vs) * scale
     lo, hi = min(depth), max(depth)
-    return [
-        (ou + u * scale, ov - v * scale, (d - lo) / (hi - lo))
-        for (u, v), d in zip(uv, depth)
-    ]
+    return [(ou + u * scale, ov - v * scale, (d - lo) / (hi - lo)) for (u, v), d in zip(uv, depth)]
 
 
 def line_width(level: int) -> float:
@@ -128,9 +125,7 @@ def svg(points) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}">'
         f"<style>g{{stroke:{LIGHT}}}@media (prefers-color-scheme:dark){{g{{stroke:{DARK}}}}}</style>"
-        '<g fill="none" stroke-linecap="round" stroke-linejoin="round">'
-        + "".join(paths)
-        + "</g></svg>\n"
+        '<g fill="none" stroke-linecap="round" stroke-linejoin="round">' + "".join(paths) + "</g></svg>\n"
     )
 
 

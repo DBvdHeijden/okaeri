@@ -36,7 +36,9 @@ HOST_INTERVAL = {"export.arxiv.org": 3.0}  # arXiv API asks for >= 3s between re
 TICK_SECONDS = 60
 EMBED_TIMEOUT_SECONDS = 600
 EMBED_RETRY_SECONDS = 1800  # after a failure; each try loads a ~1.3 GB child, so not every minute
-IDLE_PRIORITY = subprocess.IDLE_PRIORITY_CLASS if sys.platform == "win32" else 0  # Windows has no nice(); app.embed calls it elsewhere
+IDLE_PRIORITY = (
+    subprocess.IDLE_PRIORITY_CLASS if sys.platform == "win32" else 0
+)  # Windows has no nice(); app.embed calls it elsewhere
 
 # --- normalisation -----------------------------------------------------------
 
@@ -56,10 +58,13 @@ def item_key(url: str) -> str:
     if host in ("arxiv.org", "export.arxiv.org") or (host == "huggingface.co" and path.startswith("/papers/")):
         if m := _ARXIV_ID.search(path):
             return f"arxiv:{m.group(1)}"
-    query = urlencode(sorted(
-        (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
-        if not (k.lower().startswith("utm_") or k.lower() in _TRACKING)
-    ))
+    query = urlencode(
+        sorted(
+            (k, v)
+            for k, v in parse_qsl(parts.query, keep_blank_values=True)
+            if not (k.lower().startswith("utm_") or k.lower() in _TRACKING)
+        )
+    )
     return f"{host}{path}" + (f"?{query}" if query else "")
 
 
@@ -109,16 +114,18 @@ def parse_feed(content: bytes, source: Source, now: datetime | None = None) -> l
         if not title or title.startswith("[$]"):  # LWN marks subscriber-only articles this way
             continue
         published = _to_datetime(entry.get("published_parsed") or entry.get("updated_parsed")) or now
-        items.append(FetchedItem(
-            key=item_key(url),
-            url=url,
-            title=title,
-            published_at=published,
-            summary=summary,
-            discussion_url=entry.get("comments"),
-            score=int(votes.group(1)) if votes else None,
-            comments=int(comments.group(1)) if comments else None,
-        ))
+        items.append(
+            FetchedItem(
+                key=item_key(url),
+                url=url,
+                title=title,
+                published_at=published,
+                summary=summary,
+                discussion_url=entry.get("comments"),
+                score=int(votes.group(1)) if votes else None,
+                comments=int(comments.group(1)) if comments else None,
+            )
+        )
     return _keep_recent(items, now)
 
 
@@ -132,16 +139,18 @@ def parse_hf_papers(data: list[dict], now: datetime | None = None) -> list[Fetch
             continue
         url = f"https://huggingface.co/papers/{paper_id}"
         published = entry.get("publishedAt") or paper.get("publishedAt")
-        items.append(FetchedItem(
-            key=item_key(url),
-            url=url,
-            title=clean_text(title, 300),
-            published_at=datetime.fromisoformat(published.replace("Z", "+00:00")) if published else now,
-            summary=clean_text(entry.get("summary") or paper.get("summary", ""), 600),
-            discussion_url=url,
-            score=paper.get("upvotes"),
-            comments=entry.get("numComments"),
-        ))
+        items.append(
+            FetchedItem(
+                key=item_key(url),
+                url=url,
+                title=clean_text(title, 300),
+                published_at=datetime.fromisoformat(published.replace("Z", "+00:00")) if published else now,
+                summary=clean_text(entry.get("summary") or paper.get("summary", ""), 600),
+                discussion_url=url,
+                score=paper.get("upvotes"),
+                comments=entry.get("numComments"),
+            )
+        )
     return _keep_recent(items, now)
 
 
@@ -157,15 +166,17 @@ def parse_hn_algolia(data: dict, now: datetime | None = None) -> list[FetchedIte
             continue
         thread = f"https://news.ycombinator.com/item?id={hit['objectID']}"
         url = hit.get("url") or thread  # Ask HN etc. have no external link
-        items.append(FetchedItem(
-            key=item_key(url),
-            url=url,
-            title=clean_text(hit["title"], 300),
-            published_at=datetime.fromtimestamp(hit["created_at_i"], UTC),
-            discussion_url=thread,
-            score=hit.get("points"),
-            comments=hit.get("num_comments"),
-        ))
+        items.append(
+            FetchedItem(
+                key=item_key(url),
+                url=url,
+                title=clean_text(hit["title"], 300),
+                published_at=datetime.fromtimestamp(hit["created_at_i"], UTC),
+                discussion_url=thread,
+                score=hit.get("points"),
+                comments=hit.get("num_comments"),
+            )
+        )
     return _keep_recent(items, now)
 
 
@@ -174,16 +185,18 @@ def parse_lobsters(data: list[dict], now: datetime | None = None) -> list[Fetche
     items = []
     for story in data:
         url = story.get("url") or story["comments_url"]
-        items.append(FetchedItem(
-            key=item_key(url),
-            url=url,
-            title=clean_text(story["title"], 300),
-            published_at=_iso_datetime(story["created_at"]),
-            summary=clean_text(story.get("description", ""), 600),
-            discussion_url=story["comments_url"],
-            score=story.get("score"),
-            comments=story.get("comment_count"),
-        ))
+        items.append(
+            FetchedItem(
+                key=item_key(url),
+                url=url,
+                title=clean_text(story["title"], 300),
+                published_at=_iso_datetime(story["created_at"]),
+                summary=clean_text(story.get("description", ""), 600),
+                discussion_url=story["comments_url"],
+                score=story.get("score"),
+                comments=story.get("comment_count"),
+            )
+        )
     return _keep_recent(items, now)
 
 
@@ -196,15 +209,17 @@ def parse_lw_graphql(data: dict, now: datetime | None = None) -> list[FetchedIte
     items = []
     for post in data.get("data", {}).get("posts", {}).get("results", []):
         url = post.get("url") or post["pageUrl"]  # link posts point elsewhere
-        items.append(FetchedItem(
-            key=item_key(url),
-            url=url,
-            title=clean_text(post["title"], 300),
-            published_at=_iso_datetime(post["postedAt"]),
-            discussion_url=post["pageUrl"],
-            score=post.get("baseScore"),
-            comments=post.get("commentCount"),
-        ))
+        items.append(
+            FetchedItem(
+                key=item_key(url),
+                url=url,
+                title=clean_text(post["title"], 300),
+                published_at=_iso_datetime(post["postedAt"]),
+                discussion_url=post["pageUrl"],
+                score=post.get("baseScore"),
+                comments=post.get("commentCount"),
+            )
+        )
     return _keep_recent(items, now)
 
 
@@ -227,7 +242,9 @@ async def fetch_source(client: httpx.AsyncClient, source: Source, store: Store) 
     await asyncio.to_thread(save_response, store, source, resp, etag, last_modified)
 
 
-def save_response(store: Store, source: Source, resp: httpx.Response, etag: str | None, last_modified: str | None) -> None:
+def save_response(
+    store: Store, source: Source, resp: httpx.Response, etag: str | None, last_modified: str | None
+) -> None:
     if resp.status_code == 304:
         store.save_fetch(source.id, None, etag, last_modified)
         return
@@ -309,7 +326,9 @@ class Refresher:
         # Also when there's nothing to embed yet but the model isn't here: it downloads during onboarding's first steps.
         if model_downloaded() and not await asyncio.to_thread(lambda: pending(self.store) or pending_texts(self.store)):
             return
-        child = await asyncio.create_subprocess_exec(sys.executable, "-m", "app.embed", cwd=ROOT, creationflags=IDLE_PRIORITY)
+        child = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "app.embed", cwd=ROOT, creationflags=IDLE_PRIORITY
+        )
         self.embedding = True
         try:
             await asyncio.wait_for(child.wait(), EMBED_TIMEOUT_SECONDS)
