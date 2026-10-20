@@ -53,7 +53,8 @@ Using an AI agent or vibe coding is fine. A lot of okaeri was built that way. Bu
 ## Common changes
 
 - **Adding a source:** add an entry to `catalog/sources.json`, with one medium and up to two topics from
-  `catalog/tags.json`. Then run `uv run scripts/sample_sources.py`, so onboarding can match against its titles.
+  `catalog/tags.json`. Then run `uv run scripts/sample_sources.py`, so onboarding can match against its titles. It
+  also writes `catalog/vectors.npz`; after editing just a description, `uv run python -m app.embed catalog` does that.
 - **Changing the ranking:** all of it goes through `rank()` in `app/rank.py`. Update
   [docs/ranking.md](docs/ranking.md) in the same PR.
 

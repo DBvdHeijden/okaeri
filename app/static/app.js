@@ -603,7 +603,7 @@
     async function loadMap() {
       const note = map.querySelector("[data-about-wait]");
       if (note.hidden && !REDUCED) note.animate([{ opacity: 0 }, {}], { duration: 300, easing: "ease-out" });
-      note.hidden = false;  // the first time it can take a while: the model downloads, then reads the catalog
+      note.hidden = false;  // the first time it can take a while: the model downloads
       const res = await fetch("/onboarding/about/map");
       if (!map.isConnected) return;
       if (!res.ok) return setTimeout(loadMap, res.status === 503 ? 3000 : 10000);

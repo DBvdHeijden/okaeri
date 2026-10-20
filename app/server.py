@@ -17,7 +17,8 @@ from fastapi.templating import Jinja2Templates
 
 from app import settings
 from app.embed import (
-    MODEL, LiveEmbedder, about_document, model_downloaded, pending, source_document, stored_vectors, text_key, topic_document,
+    MODEL, LiveEmbedder, about_document, load_catalog_vectors, model_downloaded, pending, source_document, stored_vectors,
+    text_key, topic_document,
 )
 from app.fetch import Refresher
 from app.models import Article, Event, Source
@@ -53,6 +54,7 @@ def store() -> Store:
 async def lifespan(app: FastAPI):
     task = None
     app.state.refresher = None
+    load_catalog_vectors(store())
     if os.environ.get("OKAERI_FETCH", "1") != "0":
         app.state.refresher = Refresher(store(), BY_ID)
         task = asyncio.create_task(app.state.refresher.run())
@@ -62,7 +64,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
 
 
-live = LiveEmbedder()  # onboarding's map, while you're on it
+live = LiveEmbedder()  # the interests you write on onboarding's map, while you're on it
 app = FastAPI(title="okaeri", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
@@ -381,14 +383,13 @@ def onboarding_about_submit(request: Request, about: Annotated[list[str] | None,
     return RedirectResponse("/onboarding/interests", status_code=303)
 
 
-async def vectors_for(texts: list[str]) -> np.ndarray:
-    """Their vectors, embedding (and saving) the ones not stored yet."""
-    stored = await asyncio.to_thread(stored_vectors, store())
-    if missing := [t for t in dict.fromkeys(texts) if text_key(t) not in stored]:
-        new = await live.embed(missing)
-        await asyncio.to_thread(store().save_embeddings, MODEL, [(text_key(t), v.tobytes()) for t, v in zip(missing, new)])
-        stored |= {text_key(t): v for t, v in zip(missing, new)}
-    return np.vstack([stored[text_key(t)] for t in texts])
+async def vector_for(text: str) -> np.ndarray:
+    """Its vector, embedding (and saving) it if it's not stored yet."""
+    if (vector := (await asyncio.to_thread(stored_vectors, store())).get(text_key(text))) is not None:
+        return vector
+    vector = (await live.embed([text]))[0]
+    await asyncio.to_thread(store().save_embeddings, MODEL, [(text_key(text), vector.tobytes())])
+    return vector
 
 
 def field_ring(topic_vectors: np.ndarray) -> np.ndarray:
@@ -412,16 +413,22 @@ def place(vectors: np.ndarray, topic_vectors: np.ndarray, ring: np.ndarray) -> n
 about_map: dict = {}  # made once: the catalog doesn't change while the server runs
 
 
-async def make_about_map() -> dict:
-    if not about_map:
-        topics = sorted(TOPICS)
-        vectors = await vectors_for([topic_document(t) for t in topics] + [source_document(s) for s in SOURCES])
-        topic_vectors, source_vectors = vectors[: len(topics)], vectors[len(topics) :]
-        ring = field_ring(topic_vectors)
-        about_map.update(
-            topics=topics, topic_vectors=topic_vectors, ring=ring, source_vectors=source_vectors,
-            sources=[{"id": s.id, "name": s.name, "description": s.description} for s in SOURCES],
-        )
+async def make_about_map() -> dict | None:
+    """None until every topic and source has a stored vector: they ship with the repo, and the refresh loop embeds
+    any changed since. Never embedded here, so reloading the step doesn't queue them up again."""
+    if about_map:
+        return about_map
+    topics = sorted(TOPICS)
+    texts = [topic_document(t) for t in topics] + [source_document(s) for s in SOURCES]
+    stored = await asyncio.to_thread(stored_vectors, store())
+    if any(text_key(t) not in stored for t in texts):
+        return None
+    vectors = np.vstack([stored[text_key(t)] for t in texts])
+    topic_vectors, source_vectors = vectors[: len(topics)], vectors[len(topics) :]
+    about_map.update(
+        topics=topics, topic_vectors=topic_vectors, ring=field_ring(topic_vectors), source_vectors=source_vectors,
+        sources=[{"id": s.id, "name": s.name, "description": s.description} for s in SOURCES],
+    )
     return about_map
 
 
@@ -432,24 +439,23 @@ def readable() -> list[int]:
 
 
 def waiting() -> JSONResponse:
-    return JSONResponse({"waiting": True}, status_code=503)  # the model is still downloading: the page asks again
+    # The model is still downloading, or the catalog changed and is being embedded: the page asks again.
+    return JSONResponse({"waiting": True}, status_code=503)
 
 
 @app.get("/onboarding/about/map")
 async def onboarding_about_map():
-    if not model_downloaded():
+    if not model_downloaded() or not (m := await make_about_map()):
         return waiting()
-    m = await make_about_map()
     return {"sources": [m["sources"][i] for i in readable()]}
 
 
 @app.post("/onboarding/about/place")
 async def onboarding_about_place(text: Annotated[str, Form()]):
     """Where one of your interests goes on the map, and the sources about it with how close each is."""
-    if not model_downloaded():
+    if not model_downloaded() or not (m := await make_about_map()):
         return waiting()
-    m = await make_about_map()
-    vector = (await vectors_for([about_document(text.strip()[:100])]))[0]
+    vector = await vector_for(about_document(text.strip()[:100]))
     (x, y), = place(vector[None], m["topic_vectors"], m["ring"]).tolist()
     indexes = readable()
     candidates = [SOURCES[i] for i in indexes]

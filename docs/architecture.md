@@ -36,8 +36,8 @@ Everything lives on your machine:
   - `embeddings`: a vector per story (and per interest text), for each model.
 - **`settings.json`**: your sources, tabs, ranking dials and onboarding answers. Missing keys fall back to
   `app/defaults.json`.
-- **`catalog/`**: the sources (`sources.json`) and the media, topics and languages (`tags.json`). They're in the
-  repo, not in your data.
+- **`catalog/`**: the sources (`sources.json`), the media, topics and languages (`tags.json`), and their vectors
+  (`vectors.npz`, loaded at startup so onboarding doesn't wait for them). They're in the repo, not in your data.
 
 ## How a story gets to the page
 
