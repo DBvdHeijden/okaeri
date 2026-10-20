@@ -21,7 +21,7 @@ import feedparser
 import httpx
 
 from app import ROOT, settings
-from app.embed import pending, pending_texts
+from app.embed import model_downloaded, pending, pending_texts
 from app.models import FetchedItem, Source
 from app.sources import MEDIA
 from app.store import Store
@@ -306,7 +306,8 @@ class Refresher:
         """Embed pending items in a child process; it logs to our stderr and takes the model's memory with it."""
         if time.monotonic() - self.embed_failed_at < EMBED_RETRY_SECONDS:
             return
-        if not await asyncio.to_thread(lambda: pending(self.store) or pending_texts(self.store)):
+        # Also when there's nothing to embed yet but the model isn't here: it downloads during onboarding's first steps.
+        if model_downloaded() and not await asyncio.to_thread(lambda: pending(self.store) or pending_texts(self.store)):
             return
         child = await asyncio.create_subprocess_exec(sys.executable, "-m", "app.embed", cwd=ROOT, creationflags=IDLE_PRIORITY)
         self.embedding = True

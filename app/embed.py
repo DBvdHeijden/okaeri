@@ -2,9 +2,10 @@
 
     python -m app.embed          # embed everything pending, then exit
     python -m app.embed serve    # embed texts as they come: a JSON list per line on stdin, their vectors on stdout
+    python -m app.embed catalog  # write the catalog's vectors to catalog/vectors.npz (scripts/sample_sources.py runs it)
 
 The refresh loop runs the first as a short-lived child process, so the server never holds the model in memory;
-onboarding's map runs the second (LiveEmbedder) while you're on it.
+onboarding's map runs the second (LiveEmbedder) for the interests you write there.
 """
 
 import asyncio
@@ -35,6 +36,7 @@ BATCH = 16  # faster than 32 and ~600 MB less peak RAM, measured on 200 feed ite
 SUMMARY_CHARS = 500
 MODEL_DIR = ROOT / "data" / "models" / "embeddinggemma-2"
 MAX_TOKENS = 256  # the title and the start of the summary carry most of the meaning; caps the peak per batch
+CATALOG_VECTORS = ROOT / "catalog" / "vectors.npz"
 
 Embedder = Callable[[list[str]], np.ndarray]
 
@@ -135,11 +137,31 @@ def topic_document(topic: str) -> str:
     return f"title: {topic} | text: {TAG_DESCRIPTIONS[topic]}"
 
 
+def catalog_texts() -> list[str]:
+    return [source_document(s) for s in SOURCES] + [topic_document(t) for t in TAG_DESCRIPTIONS]
+
+
 def pending_texts(store: Store) -> list[str]:
-    texts = [about_document(a) for a in settings.about()]
-    texts += [source_document(s) for s in SOURCES] + [topic_document(t) for t in TAG_DESCRIPTIONS]
+    texts = [about_document(a) for a in settings.about()] + catalog_texts()
     done = store.embedded_keys(MODEL)
     return [t for t in texts if text_key(t) not in done]
+
+
+def write_catalog_vectors(embed: Embedder) -> None:
+    texts = catalog_texts()
+    vectors = np.vstack([embed(texts[start : start + BATCH]) for start in range(0, len(texts), BATCH)])
+    np.savez_compressed(CATALOG_VECTORS, model=MODEL, keys=[text_key(t) for t in texts], vectors=vectors)
+
+
+def load_catalog_vectors(store: Store) -> None:
+    """Shipped with the repo, so onboarding's map is there without embedding ~100 texts first (~40 s, and longer at
+    low priority). A text changed since has no vector here; the refresh loop embeds it as usual."""
+    shipped = np.load(CATALOG_VECTORS)
+    if shipped["model"] != MODEL:
+        return
+    missing = {text_key(t) for t in catalog_texts()} - store.embedded_keys(MODEL)
+    rows = zip(shipped["keys"].tolist(), shipped["vectors"])
+    store.save_embeddings(MODEL, [(key, vector.tobytes()) for key, vector in rows if key in missing])
 
 
 def embed_new(store: Store, embed: Embedder) -> None:
@@ -193,7 +215,6 @@ class LiveEmbedder:
                 self.child = await asyncio.create_subprocess_exec(
                     sys.executable, "-m", "app.embed", "serve", cwd=ROOT,
                     stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                    limit=2**24,  # a line holds every vector of a request: the whole catalog is ~0.5 MB of JSON
                 )
             self.child.stdin.write((json.dumps(texts) + "\n").encode())
             await self.child.stdin.drain()
@@ -213,4 +234,9 @@ class LiveEmbedder:
 
 
 if __name__ == "__main__":
-    serve() if sys.argv[1:] == ["serve"] else main()
+    if sys.argv[1:] == ["serve"]:
+        serve()
+    elif sys.argv[1:] == ["catalog"]:
+        write_catalog_vectors(load_embedder())
+    else:
+        main()
