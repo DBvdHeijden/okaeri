@@ -25,12 +25,25 @@ def seed(store):
     newest_first()
     settings.set_enabled_sources(["simonw", "hn", "arxiv-cs.lg"])
     store.save_fetch("simonw", [item("https://simonwillison.net/a", "Blog post", hours_ago=2)], None, None)
-    store.save_fetch("hn", [
-        item("https://simonwillison.net/a/", "Blog post (HN title)", hours_ago=1,
-             discussion_url="https://news.ycombinator.com/item?id=1"),
-        item("https://example.com/news", "Forum link", hours_ago=3,
-             discussion_url="https://news.ycombinator.com/item?id=2"),
-    ], None, None)
+    store.save_fetch(
+        "hn",
+        [
+            item(
+                "https://simonwillison.net/a/",
+                "Blog post (HN title)",
+                hours_ago=1,
+                discussion_url="https://news.ycombinator.com/item?id=1",
+            ),
+            item(
+                "https://example.com/news",
+                "Forum link",
+                hours_ago=3,
+                discussion_url="https://news.ycombinator.com/item?id=2",
+            ),
+        ],
+        None,
+        None,
+    )
     store.save_fetch("arxiv-cs.lg", [item("https://arxiv.org/abs/2610.00001v2", "A paper", hours_ago=5)], None, None)
 
 
@@ -51,7 +64,10 @@ def test_home_merges_and_orders(store):
 
 
 def set_tabs(*tabs):
-    rows = [{"name": name, "media": [t for t in tags if t in MEDIA], "topics": [t for t in tags if t not in MEDIA]} for name, tags in tabs]
+    rows = [
+        {"name": name, "media": [t for t in tags if t in MEDIA], "topics": [t for t in tags if t not in MEDIA]}
+        for name, tags in tabs
+    ]
     settings.save({**settings.load(), "tabs": rows})
     newest_first()
 
@@ -99,7 +115,9 @@ def test_routes_go_through_rank(store, monkeypatch):
 
 def test_show_more(store):
     settings.set_enabled_sources(["simonw"])
-    store.save_fetch("simonw", [item(f"https://simonwillison.net/{i}") for i in range(server.PAGE_SIZE + 5)], None, None)
+    store.save_fetch(
+        "simonw", [item(f"https://simonwillison.net/{i}") for i in range(server.PAGE_SIZE + 5)], None, None
+    )
     html = client.get("/").text
     assert len(titles(html)) == server.PAGE_SIZE
     more = f'href="/?tab=all&amp;n={2 * server.PAGE_SIZE}#item-{server.PAGE_SIZE + 1}"'
@@ -133,8 +151,20 @@ def test_favicons():
 
 def test_counts_shown_with_comment_link(store):
     settings.set_enabled_sources(["hn"])
-    store.save_fetch("hn", [item("https://e.com/a", "Counted", score=1516, comments=1,
-                                 discussion_url="https://news.ycombinator.com/item?id=9")], None, None)
+    store.save_fetch(
+        "hn",
+        [
+            item(
+                "https://e.com/a",
+                "Counted",
+                score=1516,
+                comments=1,
+                discussion_url="https://news.ycombinator.com/item?id=9",
+            )
+        ],
+        None,
+        None,
+    )
     html = client.get("/").text
     assert "1,516 points" in html
     link = re.search(rf'<a href="/r/{article_id("e.com/a")}\?to=thread"[^>]*>(.*?)</a>', html, re.S)

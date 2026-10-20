@@ -3,9 +3,9 @@
 おかえり ("welcome back"): a calm localhost homepage with the latest papers, blogs, forums and news in science and tech.
 It fetches the sources you pick in the background and gathers them on one page, in tabs you set up yourself.
 
-Each tab shows stories newest first, or recommended. For the recommended stories a small embedding model on your machine runs in the background. 
-We register your clicks and hides, and have a simple algorithm for ranking the feed. Your reading history never leaves your device. 
-Your recommendation algorithm is yours, tune it however you'd like (either from the UI, or delve into the code). 
+Each tab shows stories newest first, or recommended. For the recommended stories a small embedding model on your machine runs in the background.
+We register your clicks and hides, and have a simple algorithm for ranking the feed. Your reading history never leaves your device.
+Your recommendation algorithm is yours, tune it however you'd like (either from the UI, or delve into the code).
 
 ![The okaeri homepage: a list of today's stories, with a slowly turning Lorenz figure beside it](.github/main_page.png)
 

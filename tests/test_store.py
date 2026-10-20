@@ -8,15 +8,27 @@ def test_merge_prefers_non_forum_source(store):
     store.save_fetch("hn", [item("https://jvns.ca/x", "HN title", discussion_url="https://hn/1")], None, None)
     store.save_fetch("jvns", [item("https://jvns.ca/x/", "Real title", hours_ago=3)], None, None)
     [a] = store.articles({i: BY_ID[i] for i in ("hn", "jvns")})
-    assert (a.title, a.source, a.also_on, a.discussion_url) == ("Real title", "Julia Evans", ("Hacker News",), "https://hn/1")
+    assert (a.title, a.source, a.also_on, a.discussion_url) == (
+        "Real title",
+        "Julia Evans",
+        ("Hacker News",),
+        "https://hn/1",
+    )
 
 
 def test_age_limit_depends_on_medium(store):
     four_days = 24 * 4
     store.save_fetch("nos", [item("https://nos.nl/a", hours_ago=four_days)], None, None)  # news: 3 days
     store.save_fetch("nature", [item("https://nature.com/a", hours_ago=four_days)], None, None)  # papers: 14 days
-    store.save_fetch("jvns", [item("https://jvns.ca/a", hours_ago=24 * 40),  # blogs: 60 days
-                              item("https://jvns.ca/old", hours_ago=24 * 70)], None, None)
+    store.save_fetch(
+        "jvns",
+        [
+            item("https://jvns.ca/a", hours_ago=24 * 40),  # blogs: 60 days
+            item("https://jvns.ca/old", hours_ago=24 * 70),
+        ],
+        None,
+        None,
+    )
     got = {a.url for a in store.articles({i: BY_ID[i] for i in ("nos", "nature", "jvns")})}
     assert got == {"https://nature.com/a", "https://jvns.ca/a"}
 
@@ -41,9 +53,12 @@ def test_due_and_cache_headers(store):
 
 def test_counts_come_from_busiest_discussion(store):
     store.save_fetch("jvns", [item("https://jvns.ca/x", "Post", hours_ago=3)], None, None)
-    store.save_fetch("hn", [item("https://jvns.ca/x", discussion_url="https://hn/1", score=300, comments=120)], None, None)
-    store.save_fetch("lobsters", [item("https://jvns.ca/x", discussion_url="https://lob/1", score=40, comments=12)],
-                     None, None)
+    store.save_fetch(
+        "hn", [item("https://jvns.ca/x", discussion_url="https://hn/1", score=300, comments=120)], None, None
+    )
+    store.save_fetch(
+        "lobsters", [item("https://jvns.ca/x", discussion_url="https://lob/1", score=40, comments=12)], None, None
+    )
     [a] = store.articles({i: BY_ID[i] for i in ("jvns", "hn", "lobsters")})
     assert (a.source, a.score, a.comments, a.discussion_url) == ("Julia Evans", 300, 120, "https://hn/1")
 

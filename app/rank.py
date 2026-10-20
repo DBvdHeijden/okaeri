@@ -64,7 +64,10 @@ def rank(
 
 
 def explain(
-    articles: Sequence[Article], events: Sequence[Event], settings: dict, vectors: dict[str, np.ndarray],
+    articles: Sequence[Article],
+    events: Sequence[Event],
+    settings: dict,
+    vectors: dict[str, np.ndarray],
     topics: dict[str, frozenset[str]],
 ) -> list[Breakdown]:
     """Recommended, best first, with every score taken apart."""
@@ -72,7 +75,9 @@ def explain(
     liked = {e.key for e in events if e.type == "click"} | switched_on(events, "seed", "unseed").keys()
     hidden = switched_on(events, "hide", "unhide")
     topics = topics | {a.key: tags_for(a) for a in articles}
-    sig, nearest = signals(newest, [k for k in liked if k in vectors], [k for k in hidden if k in vectors], vectors, topics)
+    sig, nearest = signals(
+        newest, [k for k in liked if k in vectors], [k for k in hidden if k in vectors], vectors, topics
+    )
     w = settings["ranking"]
     wanted = w["like"] * sig["like"] + w["popular"] * sig["popular"] + CHANCE * w["random"] * sig["random"]
     # Fresh 0.5 fades a story by half every half-life of its medium; 1 twice as fast, 0 not at all.
@@ -82,14 +87,23 @@ def explain(
 
 
 def signals(
-    articles: list[Article], liked: list[str], hidden: list[str], vectors: dict[str, np.ndarray],
+    articles: list[Article],
+    liked: list[str],
+    hidden: list[str],
+    vectors: dict[str, np.ndarray],
     topics: dict[str, frozenset[str]],
 ) -> tuple[dict[str, np.ndarray], list[str | None]]:
     """Every signal for every story, 0..1, in Breakdown's order; and the liked story each is nearest to.
     `topics` has the topics of the liked and hidden stories."""
     like, nearest = closeness(articles, liked, vectors, topics)
     dislike, _ = closeness(articles, hidden, vectors, topics)
-    sig = {"like": like, "hidden": dislike, "fresh": freshness(articles), "popular": popularity(articles), "random": chance(articles)}
+    sig = {
+        "like": like,
+        "hidden": dislike,
+        "fresh": freshness(articles),
+        "popular": popularity(articles),
+        "random": chance(articles),
+    }
     return sig, nearest
 
 
@@ -115,7 +129,10 @@ def learn(liked: list[Article], disliked: list[Article], vectors: dict[str, np.n
     if len(disliked) >= 2:
         sig["hidden"] = typical_closeness(rated, [a.key for a in disliked if a.key in vectors], vectors)
     trust = len(rated) / (len(rated) + HALF_TRUST_AT)
-    gap = {name: sig[name][: len(liked)].mean() - sig[name][len(liked) :].mean() for name in ("like", "hidden", "fresh", "popular")}
+    gap = {
+        name: sig[name][: len(liked)].mean() - sig[name][len(liked) :].mean()
+        for name in ("like", "hidden", "fresh", "popular")
+    }
     gap["hidden"] = -gap["hidden"]
     return {name: float(np.clip(0.5 + g * trust, 0, 1)) for name, g in gap.items()}
 
@@ -186,7 +203,9 @@ def freshness(articles: list[Article]) -> np.ndarray:
     """1 when just published, halving every half-life of the story's medium: news fades faster than blogs.
     By real age rather than as a share of the time on the homepage, which kept a two-week-old blog post fresh."""
     now = datetime.now(UTC)
-    half_lives = np.array([(now - a.published_at).total_seconds() / 86400 / MEDIA[medium_of(a)]["half_life_days"] for a in articles])
+    half_lives = np.array(
+        [(now - a.published_at).total_seconds() / 86400 / MEDIA[medium_of(a)]["half_life_days"] for a in articles]
+    )
     return 0.5 ** np.clip(half_lives, 0, None)
 
 
@@ -207,7 +226,9 @@ def popularity(articles: list[Article]) -> np.ndarray:
         if a.score is not None or a.comments is not None:
             by_source.setdefault(a.source_id, []).append(i)
     for idx in by_source.values():
-        out[idx] = percentile(np.array([np.log1p(articles[i].score or 0) + np.log1p(articles[i].comments or 0) for i in idx]))
+        out[idx] = percentile(
+            np.array([np.log1p(articles[i].score or 0) + np.log1p(articles[i].comments or 0) for i in idx])
+        )
     return out
 
 

@@ -49,8 +49,9 @@ def test_parse_atom_arxiv():
 
 
 def test_parse_hf_papers():
-    data = [{"title": "Lattice", "summary": "x", "publishedAt": "2026-10-07T20:00:00.000Z",
-             "paper": {"id": "2610.11216"}}]
+    data = [
+        {"title": "Lattice", "summary": "x", "publishedAt": "2026-10-07T20:00:00.000Z", "paper": {"id": "2610.11216"}}
+    ]
     [p] = parse_hf_papers(data, now=NOW)
     assert p.key == "arxiv:2610.11216"  # merges with the arXiv listing
     assert p.url == "https://huggingface.co/papers/2610.11216"
@@ -74,12 +75,26 @@ def test_item_key():
 
 
 def test_parse_hn_algolia():
-    data = {"hits": [
-        {"objectID": "1", "title": "Story", "url": "https://e.com/a", "points": 516, "num_comments": 105,
-         "created_at_i": int(NOW.timestamp()) - 3600},
-        {"objectID": "2", "title": "Ask HN: x?", "url": None, "points": 3, "num_comments": 1,
-         "created_at_i": int(NOW.timestamp()) - 60},
-    ]}
+    data = {
+        "hits": [
+            {
+                "objectID": "1",
+                "title": "Story",
+                "url": "https://e.com/a",
+                "points": 516,
+                "num_comments": 105,
+                "created_at_i": int(NOW.timestamp()) - 3600,
+            },
+            {
+                "objectID": "2",
+                "title": "Ask HN: x?",
+                "url": None,
+                "points": 3,
+                "num_comments": 1,
+                "created_at_i": int(NOW.timestamp()) - 60,
+            },
+        ]
+    }
     ask, story = parse_hn_algolia(data, now=NOW)
     assert (story.url, story.score, story.comments) == ("https://e.com/a", 516, 105)
     assert story.discussion_url == "https://news.ycombinator.com/item?id=1"
@@ -87,17 +102,38 @@ def test_parse_hn_algolia():
 
 
 def test_parse_lobsters():
-    data = [{"title": "T", "url": "https://e.com/x", "score": 22, "comment_count": 9,
-             "created_at": "2026-10-11T04:37:56.100-05:00", "comments_url": "https://lobste.rs/s/u9ue6c/t"}]
+    data = [
+        {
+            "title": "T",
+            "url": "https://e.com/x",
+            "score": 22,
+            "comment_count": 9,
+            "created_at": "2026-10-11T04:37:56.100-05:00",
+            "comments_url": "https://lobste.rs/s/u9ue6c/t",
+        }
+    ]
     [s] = parse_lobsters(data, now=NOW)
     assert (s.score, s.comments, s.discussion_url) == (22, 9, "https://lobste.rs/s/u9ue6c/t")
     assert s.published_at == datetime(2026, 10, 11, 9, 37, 56, 100000, tzinfo=UTC)
 
 
 def test_parse_lw_graphql():
-    data = {"data": {"posts": {"results": [
-        {"title": "P", "pageUrl": "https://www.alignmentforum.org/posts/a/p", "url": None,
-         "baseScore": 28, "commentCount": 4, "postedAt": "2026-10-10T16:20:55.591Z"}]}}}
+    data = {
+        "data": {
+            "posts": {
+                "results": [
+                    {
+                        "title": "P",
+                        "pageUrl": "https://www.alignmentforum.org/posts/a/p",
+                        "url": None,
+                        "baseScore": 28,
+                        "commentCount": 4,
+                        "postedAt": "2026-10-10T16:20:55.591Z",
+                    }
+                ]
+            }
+        }
+    }
     [p] = parse_lw_graphql(data, now=NOW)
     assert (p.url, p.score, p.comments) == ("https://www.alignmentforum.org/posts/a/p", 28, 4)
 
@@ -113,8 +149,14 @@ def test_tildes_counts_from_rss():
 
 
 def test_hf_papers_counts():
-    data = [{"title": "L", "publishedAt": "2026-10-07T20:00:00.000Z", "numComments": 2,
-             "paper": {"id": "2610.11216", "upvotes": 41}}]
+    data = [
+        {
+            "title": "L",
+            "publishedAt": "2026-10-07T20:00:00.000Z",
+            "numComments": 2,
+            "paper": {"id": "2610.11216", "upvotes": 41},
+        }
+    ]
     [p] = parse_hf_papers(data, now=NOW)
     assert (p.score, p.comments) == (41, 2)
 

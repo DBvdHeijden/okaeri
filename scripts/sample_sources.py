@@ -33,9 +33,13 @@ with tempfile.TemporaryDirectory() as tmp:
     asyncio.run(refresh(store, SOURCES))
     with sqlite3.connect(path) as db:
         latest = {
-            s.id: [title for title, in db.execute(
-                "SELECT title FROM items WHERE source_id = ? ORDER BY published_at DESC LIMIT ?", (s.id, SAMPLE_SIZE)
-            )]
+            s.id: [
+                title
+                for (title,) in db.execute(
+                    "SELECT title FROM items WHERE source_id = ? ORDER BY published_at DESC LIMIT ?",
+                    (s.id, SAMPLE_SIZE),
+                )
+            ]
             for s in SOURCES
         }
 

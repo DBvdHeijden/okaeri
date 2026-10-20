@@ -77,13 +77,16 @@ def load_embedder() -> Embedder:
     def embed(texts: list[str]) -> np.ndarray:
         encodings = tokenizer.encode_batch(texts)
         # sentence_embedding is mean-pooled and L2-normalised, as in the official model.
-        (vectors,) = session.run(["sentence_embedding"], {
-            "input_ids": np.array([e.ids for e in encodings], np.int64),
-            "attention_mask": np.array([e.attention_mask for e in encodings], np.int64),
-            "image_features": no_media,
-            "video_features": no_media,
-            "audio_features": no_media,
-        })
+        (vectors,) = session.run(
+            ["sentence_embedding"],
+            {
+                "input_ids": np.array([e.ids for e in encodings], np.int64),
+                "attention_mask": np.array([e.attention_mask for e in encodings], np.int64),
+                "image_features": no_media,
+                "video_features": no_media,
+                "audio_features": no_media,
+            },
+        )
         vectors = vectors[:, :DIMS]
         return (vectors / np.linalg.norm(vectors, axis=1, keepdims=True)).astype(np.float32)
 
@@ -213,8 +216,13 @@ class LiveEmbedder:
         async with self.lock:  # one request at a time: answers come back in order on one pipe
             if self.child is None:
                 self.child = await asyncio.create_subprocess_exec(
-                    sys.executable, "-m", "app.embed", "serve", cwd=ROOT,
-                    stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                    sys.executable,
+                    "-m",
+                    "app.embed",
+                    "serve",
+                    cwd=ROOT,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
                 )
             self.child.stdin.write((json.dumps(texts) + "\n").encode())
             await self.child.stdin.drain()

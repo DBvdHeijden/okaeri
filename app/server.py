@@ -17,14 +17,32 @@ from fastapi.templating import Jinja2Templates
 
 from app import settings
 from app.embed import (
-    MODEL, LiveEmbedder, about_document, load_catalog_vectors, model_downloaded, pending, source_document, stored_vectors,
-    text_key, topic_document,
+    MODEL,
+    LiveEmbedder,
+    about_document,
+    load_catalog_vectors,
+    model_downloaded,
+    pending,
+    source_document,
+    stored_vectors,
+    text_key,
+    topic_document,
 )
 from app.fetch import Refresher
 from app.models import Article, Event, Source
 from app.rank import learn, rank, sample, switched_on
 from app.sources import (
-    BY_ID, LANGUAGES, MEDIA, SOURCES, TAG_DESCRIPTIONS, TOPICS, in_tab, medium_of, source_matches, speaks, tags_for,
+    BY_ID,
+    LANGUAGES,
+    MEDIA,
+    SOURCES,
+    TAG_DESCRIPTIONS,
+    TOPICS,
+    in_tab,
+    medium_of,
+    source_matches,
+    speaks,
+    tags_for,
 )
 from app.store import Store, default_path, open_store
 
@@ -43,7 +61,6 @@ RING_PULL = 0.78  # step 3's map: how far toward its fields a point goes, the fi
 TEMPERATURE = 0.015  # how sharply a point goes to its nearest field rather than between several
 HISTORY_SIZE = 100
 HISTORY_VIEWS = {"opened": "Opened", "liked": "Liked", "hidden": "Hidden"}
-
 
 
 def store() -> Store:
@@ -256,6 +273,7 @@ def wake_refresher(request: Request) -> None:
 
 # Settings: the sources you follow, and a way back into onboarding. Onboarding is only for when nothing is picked yet.
 
+
 def tab_editor_context() -> dict:
     """What the tab editor (_tabs.html) needs, in Settings and the onboarding tabs step."""
     tabs = settings.all_tabs()
@@ -284,7 +302,15 @@ def settings_page(request: Request):
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {**tab_editor_context(), **ranking_context(), "groups": groups, "selected": enabled, "languages": LANGUAGES, "spoken": settings.languages(), "progress": background_work(request)},
+        {
+            **tab_editor_context(),
+            **ranking_context(),
+            "groups": groups,
+            "selected": enabled,
+            "languages": LANGUAGES,
+            "spoken": settings.languages(),
+            "progress": background_work(request),
+        },
     )
 
 
@@ -319,6 +345,7 @@ def settings_submit(
 
 # Onboarding: your name (optional), the languages and media you read, what you like to read about, fields, sources,
 # a sample of stories to rate, the ranking, then (optionally) tabs.
+
 
 def spoken_sources() -> list[Source]:
     return [s for s in SOURCES if speaks(s, settings.languages())]
@@ -367,6 +394,7 @@ def onboarding_name_submit(name: Annotated[str, Form()] = ""):
 # Step 3: what you'd like to read about, in your own words, a few words each. Each becomes a point on a map, near
 # the fields it's about (they aren't drawn: a ring of names was a lot to take in), and the sources nearest to it come
 # out of it and are listed beside it. Later steps tick the fields and sources nearest to them.
+
 
 @app.get("/onboarding/about", response_class=HTMLResponse)
 def onboarding_about(request: Request):
@@ -426,7 +454,10 @@ async def make_about_map() -> dict | None:
     vectors = np.vstack([stored[text_key(t)] for t in texts])
     topic_vectors, source_vectors = vectors[: len(topics)], vectors[len(topics) :]
     about_map.update(
-        topics=topics, topic_vectors=topic_vectors, ring=field_ring(topic_vectors), source_vectors=source_vectors,
+        topics=topics,
+        topic_vectors=topic_vectors,
+        ring=field_ring(topic_vectors),
+        source_vectors=source_vectors,
         sources=[{"id": s.id, "name": s.name, "description": s.description} for s in SOURCES],
     )
     return about_map
@@ -456,12 +487,13 @@ async def onboarding_about_place(text: Annotated[str, Form()]):
     if not model_downloaded() or not (m := await make_about_map()):
         return waiting()
     vector = await vector_for(about_document(text.strip()[:100]))
-    (x, y), = place(vector[None], m["topic_vectors"], m["ring"]).tolist()
+    ((x, y),) = place(vector[None], m["topic_vectors"], m["ring"]).tolist()
     indexes = readable()
     candidates = [SOURCES[i] for i in indexes]
     closeness = m["source_vectors"][indexes] @ vector
     return {
-        "x": x, "y": y,
+        "x": x,
+        "y": y,
         "sources": [{"id": candidates[i].id, "closeness": float(closeness[i])} for i in related(closeness, candidates)],
     }
 
@@ -481,7 +513,11 @@ def about_scores(documents: dict[str, str]) -> dict[str, np.ndarray]:
     interests = [vectors[key] for a in settings.about() if (key := text_key(about_document(a))) in vectors]
     if not interests:
         return {}
-    return {i: np.array([v @ vectors[text_key(d)] for v in interests]) for i, d in documents.items() if text_key(d) in vectors}
+    return {
+        i: np.array([v @ vectors[text_key(d)] for v in interests])
+        for i, d in documents.items()
+        if text_key(d) in vectors
+    }
 
 
 def nearest_each(scores: dict[str, np.ndarray], k: int) -> list[str]:
@@ -499,23 +535,41 @@ def onboarding_languages(request: Request):
 def reading_page(request: Request, chosen: set[str], missing: str = "", status_code: int = 200) -> HTMLResponse:
     """Step 2: how you like to read, before what about, so the next step only brings up sources you'll get."""
     groups = [
-        ("Languages", "languages", [(code, name, "", sum(s.language == code for s in SOURCES)) for code, name in LANGUAGES.items()]),
-        ("Media", "media", [(m, medium["label"], medium["description"], sum(s.medium == m for s in SOURCES)) for m, medium in MEDIA.items()]),
+        (
+            "Languages",
+            "languages",
+            [(code, name, "", sum(s.language == code for s in SOURCES)) for code, name in LANGUAGES.items()],
+        ),
+        (
+            "Media",
+            "media",
+            [
+                (m, medium["label"], medium["description"], sum(s.medium == m for s in SOURCES))
+                for m, medium in MEDIA.items()
+            ],
+        ),
     ]
     return templates.TemplateResponse(
-        request, "onboarding_languages.html", {"groups": groups, "chosen": chosen, "missing": missing}, status_code=status_code
+        request,
+        "onboarding_languages.html",
+        {"groups": groups, "chosen": chosen, "missing": missing},
+        status_code=status_code,
     )
 
 
 @app.post("/onboarding/languages")
 def onboarding_languages_submit(
-    request: Request, languages: Annotated[list[str] | None, Form()] = None, media: Annotated[list[str] | None, Form()] = None
+    request: Request,
+    languages: Annotated[list[str] | None, Form()] = None,
+    media: Annotated[list[str] | None, Form()] = None,
 ):
     languages = [lang for lang in languages or [] if lang in LANGUAGES]
     media = [m for m in media or [] if m in MEDIA]
     if not languages or not media:
         # The same step again, with your picks and what's missing. 422: Turbo only shows a failed form's page.
-        missing = " and ".join(word for word, picked in (("one language", languages), ("one medium", media)) if not picked)
+        missing = " and ".join(
+            word for word, picked in (("one language", languages), ("one medium", media)) if not picked
+        )
         return reading_page(request, {*languages, *media}, f"Pick at least {missing}.", 422)
     settings.set_languages(languages)
     settings.set_interests(media, settings.interests()["topics"])
@@ -527,10 +581,13 @@ def interests_page(
 ) -> HTMLResponse:
     # Counted among the sources in the languages and media you read: what each field would actually bring.
     media = settings.interests()["media"]
-    counts = [(t, source_count(lambda s: t in s.tags and s.medium in media)) for t in sorted(TOPICS)]
+    # source_count calls the lambda right away, so it sees the current t.
+    counts = [(t, source_count(lambda s: t in s.tags and s.medium in media)) for t in sorted(TOPICS)]  # noqa: B023
     groups = [("Fields", "topics", [(t, t, TAG_DESCRIPTIONS[t], n) for t, n in counts])]
     return templates.TemplateResponse(
-        request, "onboarding_interests.html", {"groups": groups, "chosen": chosen, "missing": missing, "suggested": suggested},
+        request,
+        "onboarding_interests.html",
+        {"groups": groups, "chosen": chosen, "missing": missing, "suggested": suggested},
         status_code=status_code,
     )
 
@@ -583,7 +640,9 @@ def onboarding_sources(request: Request):
     selected = selected or [s.id for s in offered]
     groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items()}
     return templates.TemplateResponse(
-        request, "onboarding_sources.html", {"groups": list(groups.items()), "selected": selected, "suggested": suggested}
+        request,
+        "onboarding_sources.html",
+        {"groups": list(groups.items()), "selected": selected, "suggested": suggested},
     )
 
 
@@ -603,7 +662,8 @@ def sample_pool(shuffle: bool = False, field: str = "") -> list[Article]:
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     interests = settings.interests()
     pool = [
-        a for a in store().articles(selected)
+        a
+        for a in store().articles(selected)
         if any(source_matches(BY_ID[s], interests["media"], interests["topics"]) for s in a.source_ids)
         and (not field or field in tags_for(a))
     ]
@@ -667,8 +727,11 @@ def onboarding_tune(request: Request, field: str = ""):
         request,
         "onboarding_tune.html",
         {
-            "articles": top_stories(field), "weights": settings.weights(), "field": field,
-            "fields": settings.interests()["topics"], "top_size": TOP_SIZE,
+            "articles": top_stories(field),
+            "weights": settings.weights(),
+            "field": field,
+            "fields": settings.interests()["topics"],
+            "top_size": TOP_SIZE,
         },
     )
 
@@ -739,4 +802,3 @@ def rate(request: Request, id: str, rating: Annotated[Literal["up", "down", "non
     if rating == "down" and not hidden:
         store().add_event("hide", key)
     return back(request)
-

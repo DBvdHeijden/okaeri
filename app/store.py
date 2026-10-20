@@ -1,11 +1,11 @@
 """SQLite storage: fetched items, per-feed HTTP cache state, and user events."""
 
 import hashlib
-from dataclasses import replace
 import os
 import sqlite3
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from functools import cache
 from pathlib import Path
@@ -119,7 +119,7 @@ class Store:
                     if name not in have:
                         db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
             keys = db.execute("SELECT DISTINCT key FROM items WHERE id IS NULL").fetchall()
-            db.executemany("UPDATE items SET id = ? WHERE key = ?", [(article_id(k), k) for k, in keys])
+            db.executemany("UPDATE items SET id = ? WHERE key = ?", [(article_id(k), k) for (k,) in keys])
             db.execute("CREATE INDEX IF NOT EXISTS items_id ON items (id)")
             if db.execute("SELECT 1 FROM sqlite_master WHERE name = 'clicks'").fetchone():
                 db.execute("INSERT INTO events (type, key, at) SELECT 'click', key, clicked_at FROM clicks ORDER BY id")
@@ -146,9 +146,9 @@ class Store:
         with self._conn() as db:
             last = dict(db.execute("SELECT source_id, fetched_at FROM feeds"))
         return [
-            s for s in sources
-            if s.id not in last
-            or datetime.fromisoformat(last[s.id]) + timedelta(minutes=s.refresh_minutes) <= now
+            s
+            for s in sources
+            if s.id not in last or datetime.fromisoformat(last[s.id]) + timedelta(minutes=s.refresh_minutes) <= now
         ]
 
     def pending(self, source_ids: Iterable[str]) -> bool:
@@ -182,8 +182,19 @@ class Store:
                         score = excluded.score, comments = excluded.comments
                     """,  # published_at is kept from first sight, so undated items don't float up
                     [
-                        (source_id, i.key, article_id(i.key), i.url, i.title, i.summary, i.discussion_url, _iso(i.published_at),
-                         now, i.score, i.comments)
+                        (
+                            source_id,
+                            i.key,
+                            article_id(i.key),
+                            i.url,
+                            i.title,
+                            i.summary,
+                            i.discussion_url,
+                            _iso(i.published_at),
+                            now,
+                            i.score,
+                            i.comments,
+                        )
                         for i in items
                     ],
                 )
@@ -225,7 +236,7 @@ class Store:
 
     def embedded_keys(self, model: str) -> set[str]:
         with self._conn() as db:
-            return {key for key, in db.execute("SELECT key FROM embeddings WHERE model = ?", (model,))}
+            return {key for (key,) in db.execute("SELECT key FROM embeddings WHERE model = ?", (model,))}
 
     def save_embeddings(self, model: str, rows: list[tuple[str, bytes]]) -> None:
         with self._conn() as db:
@@ -331,10 +342,11 @@ def _merge(groups: dict[str, list[tuple]], sources: dict[str, Source]) -> list[A
         group.sort(key=lambda r: (PRIMARY_ORDER[sources[r[0]].medium], r[6]))
         source_id, _, url, title, summary, discussion_url, published_at, score, comments = group[0]
         primary = sources[source_id]
-        also_on = tuple(dict.fromkeys(
-            sources[r[0]].name for r in group[1:]
-            if not _same_publisher(sources[r[0]].name, primary.name)
-        ))
+        also_on = tuple(
+            dict.fromkeys(
+                sources[r[0]].name for r in group[1:] if not _same_publisher(sources[r[0]].name, primary.name)
+            )
+        )
         # Counts and the discussion link come from the busiest discussion of the story.
         counted = [r for r in group if r[7] is not None or r[8] is not None]
         if counted:
@@ -343,21 +355,23 @@ def _merge(groups: dict[str, list[tuple]], sources: dict[str, Source]) -> list[A
             discussion_url = busiest[5] or discussion_url
         if not discussion_url:
             discussion_url = next((r[5] for r in group if r[5]), None)
-        articles.append(Article(
-            id=article_id(key),
-            key=key,
-            title=title,
-            url=url,
-            source=primary.name,
-            source_id=source_id,
-            published_at=datetime.fromisoformat(published_at),
-            also_on=also_on,
-            discussion_url=discussion_url,
-            score=score,
-            comments=comments,
-            summary=summary,
-            source_ids=tuple(dict.fromkeys(r[0] for r in group)),
-        ))
+        articles.append(
+            Article(
+                id=article_id(key),
+                key=key,
+                title=title,
+                url=url,
+                source=primary.name,
+                source_id=source_id,
+                published_at=datetime.fromisoformat(published_at),
+                also_on=also_on,
+                discussion_url=discussion_url,
+                score=score,
+                comments=comments,
+                summary=summary,
+                source_ids=tuple(dict.fromkeys(r[0] for r in group)),
+            )
+        )
     return articles
 
 

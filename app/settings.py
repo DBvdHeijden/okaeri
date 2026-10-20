@@ -15,15 +15,36 @@ DEFAULTS = ROOT / "app" / "defaults.json"
 MAX_TABS = 6  # custom tabs, besides All and History
 MAX_INTERESTS = 12  # what you'd like to read about, onboarding step 3
 # History is chronological by design; every other tab sorts by "latest" or "recommended".
-ALL_TAB = {"name": "All", "slug": "all", "media": (), "topics": (), "sources": (), "history": False, "builtin": True, "sort": "recommended"}
-HISTORY_TAB = {"name": "History", "slug": "history", "media": (), "topics": (), "sources": (), "history": True, "builtin": True, "sort": "latest"}
+ALL_TAB = {
+    "name": "All",
+    "slug": "all",
+    "media": (),
+    "topics": (),
+    "sources": (),
+    "history": False,
+    "builtin": True,
+    "sort": "recommended",
+}
+HISTORY_TAB = {
+    "name": "History",
+    "slug": "history",
+    "media": (),
+    "topics": (),
+    "sources": (),
+    "history": True,
+    "builtin": True,
+    "sort": "latest",
+}
 
 
 def load() -> dict:
     if not PATH.exists():
         shutil.copy(DEFAULTS, PATH)
     # settings.json overrides the defaults key by key, so new settings reach existing users.
-    defaults, own = json.loads(DEFAULTS.read_text(encoding="utf-8")), upgrade(json.loads(PATH.read_text(encoding="utf-8")))
+    defaults, own = (
+        json.loads(DEFAULTS.read_text(encoding="utf-8")),
+        upgrade(json.loads(PATH.read_text(encoding="utf-8"))),
+    )
     return defaults | own | {"ranking": defaults["ranking"] | own.get("ranking", {})}
 
 
@@ -196,11 +217,26 @@ def set_tabs(rows: list[dict]) -> None:
         media = [m for m in row.get("media", []) if m in MEDIA]
         topics = [t for t in row.get("topics", []) if t in TOPICS]
         # Picked sources the media and topics no longer leave over would narrow invisibly: drop them.
-        sources = [s for s in row.get("sources", []) if s in BY_ID and tab_covers(BY_ID[s], {"media": media, "topics": topics})]
-        custom.append({"name": name, "media": media, "topics": topics, "sources": sources, "hidden": bool(row.get("hidden")), "sort": sort_of(row)})
+        sources = [
+            s for s in row.get("sources", []) if s in BY_ID and tab_covers(BY_ID[s], {"media": media, "topics": topics})
+        ]
+        custom.append(
+            {
+                "name": name,
+                "media": media,
+                "topics": topics,
+                "sources": sources,
+                "hidden": bool(row.get("hidden")),
+                "sort": sort_of(row),
+            }
+        )
     settings = load()
     settings["tabs"] = [
-        {"builtin": "all", "hidden": bool(builtin.get("all", {}).get("hidden")), "sort": sort_of(builtin.get("all", {}))},
+        {
+            "builtin": "all",
+            "hidden": bool(builtin.get("all", {}).get("hidden")),
+            "sort": sort_of(builtin.get("all", {})),
+        },
         *custom[:MAX_TABS],
         {"builtin": "history", "hidden": bool(builtin.get("history", {}).get("hidden"))},
     ]
