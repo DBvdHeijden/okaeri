@@ -1,11 +1,11 @@
 """SQLite storage: fetched items, per-feed HTTP cache state, and user events."""
 
 import hashlib
-from dataclasses import replace
 import os
 import sqlite3
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from functools import cache
 from pathlib import Path

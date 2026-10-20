@@ -80,7 +80,7 @@ def line_width(level: int) -> float:
 def runs(projected, levels: int):
     """Split the polyline into runs of equal width level."""
     out, current, level = [], [], None
-    for i, (x, y, near) in enumerate(projected):
+    for x, y, near in projected:
         lvl = min(levels - 1, int(near * levels))
         if lvl != level and current:
             current.append((x, y))  # overlap one point so runs join up

@@ -46,7 +46,7 @@ Using an AI agent or vibe coding is fine. A lot of okaeri was built that way. Bu
 - **Read and understand every line.** If you can't explain why a line is there, it shouldn't be in the PR.
 - **Check that it works.** Run it, click through what changed, run the tests. Don't trust the agent saying it's done.
 - **Keep the diff to the task.** No sweeping refactors, renames or "cleanups" without a clear reason, stated in
-  the PR. 
+  the PR.
 - **Point your agent at [AGENTS.md](AGENTS.md).** Most tools read it on their own. For Claude Code, put
   `@AGENTS.md` in a `CLAUDE.md`. Updates to AGENTS.md are also allowed in PR's, it is a living document.
 

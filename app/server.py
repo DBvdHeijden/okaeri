@@ -17,14 +17,32 @@ from fastapi.templating import Jinja2Templates
 
 from app import settings
 from app.embed import (
-    MODEL, LiveEmbedder, about_document, load_catalog_vectors, model_downloaded, pending, source_document, stored_vectors,
-    text_key, topic_document,
+    MODEL,
+    LiveEmbedder,
+    about_document,
+    load_catalog_vectors,
+    model_downloaded,
+    pending,
+    source_document,
+    stored_vectors,
+    text_key,
+    topic_document,
 )
 from app.fetch import Refresher
 from app.models import Article, Event, Source
 from app.rank import learn, rank, sample, switched_on
 from app.sources import (
-    BY_ID, LANGUAGES, MEDIA, SOURCES, TAG_DESCRIPTIONS, TOPICS, in_tab, medium_of, source_matches, speaks, tags_for,
+    BY_ID,
+    LANGUAGES,
+    MEDIA,
+    SOURCES,
+    TAG_DESCRIPTIONS,
+    TOPICS,
+    in_tab,
+    medium_of,
+    source_matches,
+    speaks,
+    tags_for,
 )
 from app.store import Store, default_path, open_store
 
@@ -527,7 +545,8 @@ def interests_page(
 ) -> HTMLResponse:
     # Counted among the sources in the languages and media you read: what each field would actually bring.
     media = settings.interests()["media"]
-    counts = [(t, source_count(lambda s: t in s.tags and s.medium in media)) for t in sorted(TOPICS)]
+    # source_count calls the lambda right away, so it sees the current t.
+    counts = [(t, source_count(lambda s: t in s.tags and s.medium in media)) for t in sorted(TOPICS)]  # noqa: B023
     groups = [("Fields", "topics", [(t, t, TAG_DESCRIPTIONS[t], n) for t, n in counts])]
     return templates.TemplateResponse(
         request, "onboarding_interests.html", {"groups": groups, "chosen": chosen, "missing": missing, "suggested": suggested},
@@ -739,4 +758,3 @@ def rate(request: Request, id: str, rating: Annotated[Literal["up", "down", "non
     if rating == "down" and not hidden:
         store().add_event("hide", key)
     return back(request)
-
