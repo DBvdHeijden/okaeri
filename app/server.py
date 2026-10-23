@@ -37,6 +37,7 @@ from app.sources import (
     MEDIA,
     SOURCES,
     TAG_DESCRIPTIONS,
+    TOPIC_FAMILIES,
     TOPICS,
     in_tab,
     medium_of,
@@ -582,12 +583,20 @@ def interests_page(
     # Counted among the sources in the languages and media you read: what each field would actually bring.
     media = settings.interests()["media"]
     # source_count calls the lambda right away, so it sees the current t.
-    counts = [(t, source_count(lambda s: t in s.tags and s.medium in media)) for t in sorted(TOPICS)]  # noqa: B023
-    groups = [("Fields", "topics", [(t, t, TAG_DESCRIPTIONS[t], n) for t, n in counts])]
+    counts = {t: source_count(lambda s: t in s.tags and s.medium in media) for t in TOPICS}  # noqa: B023
+    # Your picks up top; every other field one fold away, by family.
+    picked = [t for t in TAG_DESCRIPTIONS if t in chosen]
+    families = [(family, [t for t in topics if t not in chosen]) for family, topics in TOPIC_FAMILIES.items()]
     return templates.TemplateResponse(
         request,
         "onboarding_interests.html",
-        {"groups": groups, "chosen": chosen, "missing": missing, "suggested": suggested},
+        {
+            "picked": picked,
+            "families": [(family, topics) for family, topics in families if topics],
+            "counts": counts,
+            "missing": missing,
+            "suggested": suggested,
+        },
         status_code=status_code,
     )
 

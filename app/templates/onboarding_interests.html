@@ -6,34 +6,49 @@
   <div>
     <p class="kicker" lang="ja">はじめまして</p>
     <h1>Which fields?</h1>
-    <p class="date">Step 4 of 8 · Pick the fields you enjoy: at least one.{% if suggested %} We've ticked the fields closest to what you wrote.{% endif %}</p>
+    <p class="date">Step 4 of 8 · Pick the fields you enjoy: at least one.{% if suggested %} We've ticked the fields closest to what you wrote.{% endif %} The number is how many sources each brings.</p>
   </div>
 </header>
 
+{%- macro field(topic, checked) %}
+<li>
+  <label class="field-chip" title="{{ tag_descriptions[topic] }}">
+    <input type="checkbox" class="check" name="topics" value="{{ topic }}" {% if checked %}checked{% endif %}>
+    {{ topic }} <span class="field-count">{{ counts[topic] }}</span>
+  </label>
+</li>
+{%- endmacro %}
+
 <form method="post" action="/onboarding/interests" data-onboarding>
-  {% for legend, name, options in groups %}
+  {% if picked %}
   <fieldset class="group">
-    <legend>{{ legend }}</legend>
-    <ul class="sources split">
-      {% for value, label, description, n in options %}
-      <li>
-        <label class="source">
-          <span class="source-text">
-            <span class="source-name">{{ label }}</span>
-            <span class="source-desc">{{ description }} · {{ n | count("source") }}</span>
-          </span>
-          <input type="checkbox" class="check" aria-label="{{ label }}" name="{{ name }}" value="{{ value }}" {% if value in chosen %}checked{% endif %}>
-        </label>
-      </li>
-      {% endfor %}
+    <legend>{% if suggested %}From what you wrote{% else %}Your fields{% endif %}</legend>
+    <ul class="field-chips">
+      {% for t in picked %}{{ field(t, true) }}{% endfor %}
     </ul>
   </fieldset>
-  {% endfor %}
+  {% endif %}
+
+  <div class="folds">
+  <details class="fold" data-group {% if not picked %}open{% endif %}>
+    <summary>
+      <span class="fold-label">{% if picked %}Add more fields{% else %}All fields{% endif %}</span>
+      <span class="fold-count" data-group-count></span>
+    </summary>
+    {% for family, topics in families %}
+    <fieldset class="group">
+      <legend>{{ family }}</legend>
+      <ul class="field-chips">
+        {% for t in topics %}{{ field(t, false) }}{% endfor %}
+      </ul>
+    </fieldset>
+    {% endfor %}
+  </details>
+  </div>
 
   <div class="footer-bar">
     <span class="footer-actions">
       <span data-selected-count aria-live="polite">0 selected</span>
-      <button type="button" class="link-btn" data-select-all hidden>Select all</button>
       {% if missing %}<span class="form-note" role="alert">{{ missing }}</span>{% endif %}
     </span>
     <span class="footer-actions">
