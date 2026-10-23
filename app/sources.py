@@ -22,8 +22,10 @@ _VOCAB = json.loads((ROOT / "catalog" / "tags.json").read_text(encoding="utf-8")
 # rarely) and half_life_days (how fast Recommended lets it fade, see rank.freshness). In order: when a story comes
 # from several media, the first is shown and the others are "also on".
 MEDIA: dict[str, dict] = _VOCAB["media"]
-TOPICS: frozenset[str] = frozenset(_VOCAB["topics"])
-TAG_DESCRIPTIONS: dict[str, str] = _VOCAB["topics"]
+# Grouped by family (Computing, Science, ...) only so onboarding can show them that way.
+TOPIC_FAMILIES: dict[str, dict[str, str]] = _VOCAB["topics"]
+TAG_DESCRIPTIONS: dict[str, str] = {t: d for family in TOPIC_FAMILIES.values() for t, d in family.items()}
+TOPICS: frozenset[str] = frozenset(TAG_DESCRIPTIONS)
 LANGUAGES: dict[str, str] = _VOCAB["languages"]  # code -> name
 
 
