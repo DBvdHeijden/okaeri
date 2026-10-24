@@ -74,6 +74,7 @@ def set_tabs(*tabs):
 
 def test_tab_filter(store):
     seed(store)  # simonw: blog ai software, hn: forum, arxiv-cs.lg: paper ai
+    set_tabs(("Papers", ["paper"]), ("AI", ["ai"]))
     assert titles(client.get("/?tab=papers").text) == ["A paper"]
     assert titles(client.get("/?tab=ai").text) == ["Blog post", "A paper"]
     assert titles(client.get("/?tab=nope").text) == titles(client.get("/").text)
@@ -177,7 +178,7 @@ def tab_labels(html: str) -> list[str]:
 
 def test_tabs_come_from_settings(store):
     seed(store)
-    assert tab_labels(client.get("/").text) == ["All", "AI", "Papers", "Science", "Tech", "World", "History"]
+    assert tab_labels(client.get("/").text) == ["All", "History"]  # the defaults: no topic tabs
     set_tabs(*((f"T{i}", ["ai"]) for i in range(8)))
     assert tab_labels(client.get("/").text) == ["All", "T0", "T1", "T2", "T3", "T4", "T5", "History"]
 
