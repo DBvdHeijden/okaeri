@@ -10,20 +10,38 @@
     "forum": {"label": "Forums", "max_age_days": 7, "half_life_days": 1, "description": "Link aggregators and discussion boards, ranked by their communities."}
   },
   "topics": {
-    "ai": "Machine learning, language models and the people building them.",
-    "software": "Programming, tools, systems and engineering practice.",
-    "tech": "The tech industry, gadgets, hardware and how they shape daily life.",
-    "security": "Hacks, vulnerabilities, privacy and cybercrime.",
-    "science": "Research news across all the natural sciences.",
-    "physics": "From particles and quantum to cosmology.",
-    "math": "Pure and applied mathematics, proofs and puzzles.",
-    "biology": "Life sciences: genes, cells, evolution and ecology.",
-    "health": "Medicine, public health and drug discovery.",
-    "climate": "Climate change, energy and the environment.",
-    "space": "Spaceflight, astronomy and planetary science.",
-    "world": "General and international news from around the globe.",
-    "politics": "Elections, governments, policy and geopolitics.",
-    "economy": "Markets, business and economic ideas.",
-    "sports": "Football, cycling, tennis and the rest of the sporting world."
+    "Computing": {
+      "ai": "Machine learning, language models and the people building them.",
+      "software": "Programming, tools, systems and engineering practice.",
+      "web": "The web platform: browsers, HTML, CSS, JavaScript and accessibility.",
+      "design": "Interfaces, UX, typography and how tools should feel.",
+      "tech": "The tech industry, gadgets, hardware and how they shape daily life.",
+      "hardware": "Chips, semiconductors, computers and electronics, from the fab to the bench.",
+      "robotics": "Robots, drones and autonomous machines.",
+      "startups": "Founders, venture capital and tech strategy.",
+      "security": "Hacks, vulnerabilities, privacy and cybercrime."
+    },
+    "Science": {
+      "science": "Research news across all the natural sciences.",
+      "physics": "From particles and quantum to cosmology.",
+      "math": "Pure and applied mathematics, proofs and puzzles.",
+      "biology": "Life sciences: genes, cells, evolution and ecology.",
+      "health": "Medicine, public health and drug discovery.",
+      "psychology": "Mind, behaviour and neuroscience.",
+      "space": "Spaceflight, astronomy and planetary science."
+    },
+    "Society": {
+      "climate": "Climate change, energy and the environment.",
+      "energy": "Power grids, batteries, nuclear, solar and the energy transition.",
+      "cities": "Urbanism, transport, housing and how things get built.",
+      "economy": "Markets, business and economic ideas.",
+      "politics": "Elections, governments, policy and geopolitics.",
+      "world": "General and international news from around the globe.",
+      "sports": "Football, cycling, tennis and the rest of the sporting world."
+    },
+    "Ideas": {
+      "philosophy": "Philosophy, ethics and the big questions of mind and knowledge.",
+      "history": "History, including the history of science and technology."
+    }
   }
 }

@@ -63,7 +63,7 @@ okaeri only goes online to fetch your feeds, download the embedding model from H
 
 ## Sources
 
-The [catalog](catalog/sources.json) has about 90 sources in English and Dutch: papers, blogs, news and forums on AI, software, security, science, space, climate, world news, politics and sports. Think arXiv, Nature, Quanta, Hacker News, Simon Willison and Ars Technica.
+The [catalog](catalog/sources.json) has about 160 sources in English and Dutch: papers, blogs, news and forums on AI, software, the web, hardware, security, science, health, space, climate and energy, philosophy, history, world news, politics and sports. Think arXiv, Nature, Quanta, Hacker News, Simon Willison, SemiAnalysis and Ars Technica.
 
 Pick sources on the Settings page (the gear). Adding your own feeds there is in progress; for now, add one to `catalog/sources.json` and send it as a pull request ([how](CONTRIBUTING.md#common-changes)). You can also list source ids under `sources.enabled` in `settings.json`.
 
