@@ -157,14 +157,14 @@ def history(view: str) -> list[Article]:
     return store().stories(dict(newest), BY_ID)  # the whole catalog: links stay for sources you no longer follow
 
 
-def event_topics(events: list[Event]) -> dict[str, frozenset[str]]:
-    """The topics of the stories you opened, liked or hid, for Recommended's taste per topic. From every story
-    still stored: many have left the feed."""
-    return {a.key: tags_for(a) for a in store().stories({e.key: e.at for e in events}, BY_ID)}
+def event_stories(events: list[Event]) -> dict[str, Article]:
+    """The stories you opened, liked or hid, for how their sources went. From every story still stored: many have
+    left the feed."""
+    return {a.key: a for a in store().stories({e.key: e.at for e in events}, BY_ID)}
 
 
 def recommended(pool: list[Article], events: list[Event]) -> list[Article]:
-    return rank(pool, events, settings.load(), stored_vectors(store()), "recommended", event_topics(events))
+    return rank(pool, events, settings.load(), stored_vectors(store()), "recommended", event_stories(events))
 
 
 def feed(selected: dict[str, Source], tab: dict) -> list[Article]:
@@ -793,7 +793,7 @@ def learned_weights() -> dict[str, float]:
     stories = {a.key: a for a in store().articles(BY_ID)}  # with their real publish times, for freshness
     liked = [stories[k] for k in switched_on(events, "seed", "unseed") if k in stories]
     disliked = [stories[k] for k in switched_on(events, "hide", "unhide") if k in stories]
-    return learn(liked, disliked, stored_vectors(store()))
+    return learn(liked, disliked, stored_vectors(store()), list(stories.values()))
 
 
 @app.post("/rate/{id}")
