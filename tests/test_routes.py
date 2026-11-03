@@ -173,7 +173,7 @@ def test_counts_shown_with_comment_link(store):
 
 
 def tab_labels(html: str) -> list[str]:
-    return re.findall(r'<a href="/\?tab=[\w-]+"[^>]*>([^<]+)</a>', html)
+    return re.findall(r'<a href="/\?tab=[\w-]+"[^>]*>([^<]+)(?:<span class="tab-line"></span>)?</a>', html)
 
 
 def test_tabs_come_from_settings(store):

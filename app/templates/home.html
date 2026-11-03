@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {#- With JS, app.js looks again ([data-refresh]) without a full reload. #}
+{% block page_class %}home{% endblock %}
 {% block head %}{% if pending and not articles %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock %}
 {#- Permanent: Turbo keeps this canvas across tab switches, so the figure carries on. #}
 {% block aside %}<canvas class="lorenz" id="lorenz" data-lorenz data-turbo-permanent aria-hidden="true"></canvas>{% endblock %}
@@ -21,7 +22,7 @@
 {% if tabs %}
 <nav class="tabs" aria-label="Filter by topic">
   {% for t in tabs %}
-  <a href="/?tab={{ t.slug }}" data-tab="{{ t.slug }}"{% if t.history %} data-history{% endif %} {% if t == tab %}aria-current="page"{% endif %}>{{ t.name }}</a>
+  <a href="/?tab={{ t.slug }}" data-tab="{{ t.slug }}"{% if t.history %} data-history{% endif %} {% if t == tab %}aria-current="page"{% endif %}>{{ t.name }}{% if t == tab %}<span class="tab-line"></span>{% endif %}</a>
   {% endfor %}
 </nav>
 {% endif %}

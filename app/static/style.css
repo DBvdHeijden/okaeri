@@ -3,6 +3,7 @@
 @font-face { font-family: "IBM Plex Sans"; font-weight: 400 600; font-display: swap; src: url(fonts/plex-sans.woff2) format("woff2"); }
 @font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-display: swap; src: url(fonts/plex-mono-400.woff2) format("woff2"); }
 @font-face { font-family: "IBM Plex Mono"; font-weight: 500; font-display: swap; src: url(fonts/plex-mono-500.woff2) format("woff2"); }
+@font-face { font-family: "Literata"; font-weight: 400 500; font-display: swap; src: url(fonts/literata.woff2) format("woff2"); }
 @font-face { font-family: "IBM Plex Sans JP"; font-weight: 500; font-display: swap; src: url(fonts/plex-sans-jp-500.woff2) format("woff2"); }
 
 :root {
@@ -244,9 +245,19 @@ h1 {
   text-decoration: none;
   white-space: nowrap;
   font-size: 15px;
+  position: relative;
 }
 .tabs a:hover { color: var(--text); background: var(--chip); }
 .tabs a[aria-current="page"] { color: var(--text); font-weight: 500; }
+.tabs a:active { transform: scale(0.97); }
+/* Its own view transition, so on a tab switch the line slides from the old tab to the new one. */
+.tab-line {
+  position: absolute;
+  left: 14px; right: 14px; bottom: 8px;
+  height: 2px;
+  background: var(--warm);
+  view-transition-name: tab-line;
+}
 .tabs a[aria-current="page"]:hover { background: none; }
 .tabs a[data-history]:last-child { margin-left: auto; }
 
@@ -974,3 +985,11 @@ h1 {
   :is(.row, .rate-row):is(.entering, .leaving), .fold[open] > :not(summary), .tab-sources[open] > :not(summary), .about-point, .about-source { animation: none; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; }
 }
+
+/* Home: tabs, the date, the headlines and the meta lines in Literata; the tabs in caps, spaced out so they don't crowd. */
+.home { --serif: "Literata", Georgia, serif; }
+.home .tabs a { font: 400 13px var(--serif); text-transform: uppercase; letter-spacing: 0.06em; }
+.home .date { font: 13px/1.5 var(--serif); }
+.home .meta { font: 12px/1.4 var(--serif); }
+.home .row .title { font: 500 16px/1.35 var(--serif); }
+.home .row-text { height: calc(2 * 16px * 1.35 + 1px + 12px * 1.4); }

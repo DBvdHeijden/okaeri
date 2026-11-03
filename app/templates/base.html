@@ -13,7 +13,7 @@
   {% block head %}{% endblock %}
   {#- Fetched alongside the stylesheet instead of after it, so the text is drawn in its own font the first time.
       Unversioned, to match the URLs in style.css. #}
-  {%- for font in ("plex-sans", "plex-mono-400", "plex-mono-500", "plex-sans-jp-500") %}
+  {%- for font in ("plex-sans", "plex-mono-400", "plex-mono-500", "plex-sans-jp-500", "literata") %}
   <link rel="preload" href="/static/fonts/{{ font }}.woff2" as="font" type="font/woff2" crossorigin>
   {%- endfor %}
   {#- Turbo fetches each next page and swaps it into this one, so the window is never blank between pages (Firefox
