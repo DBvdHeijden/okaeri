@@ -49,9 +49,54 @@ def _source(raw: dict) -> Source:
         raise ValueError(f"source {raw['id']!r} has unknown language {raw['language']!r}")
     return Source(**{**raw, "tags": tags, "sample": tuple(raw.get("sample", ()))})
 
+CUSTOM_SOURCES_PATH = ROOT / "catalog" / "custom_sources.json"
 
-SOURCES: list[Source] = [_source(s) for s in json.loads((ROOT / "catalog" / "sources.json").read_text(encoding="utf-8"))]
+
+def load_custom_sources_raw() -> list[dict]:
+    if not CUSTOM_SOURCES_PATH.exists():
+        return []
+    try:
+        return json.loads(CUSTOM_SOURCES_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        log.warning("failed to load custom sources from %s: %s", CUSTOM_SOURCES_PATH, e)
+        return []
+
+
+def _load_all_sources() -> list[Source]:
+    base_raw = json.loads((ROOT / "catalog" / "sources.json").read_text(encoding="utf-8"))
+    custom_raw = load_custom_sources_raw()
+    all_sources: list[Source] = []
+    seen_ids = set()
+    for raw in base_raw + custom_raw:
+        s_id = raw.get("id")
+        if s_id and s_id not in seen_ids:
+            try:
+                all_sources.append(_source(raw))
+                seen_ids.add(s_id)
+            except Exception as e:
+                log.warning("skipping invalid source %s: %s", s_id, e)
+    return all_sources
+
+
+SOURCES: list[Source] = _load_all_sources()
 BY_ID: dict[str, Source] = {s.id: s for s in SOURCES}
+
+
+def add_custom_source(source_data: dict) -> Source:
+    global SOURCES, BY_ID
+    source_obj = _source(source_data)
+    custom_raw = load_custom_sources_raw()
+    
+    #Apend if ID does not already exist
+    if not any(s.get("id") == source_obj.id for s in custom_raw):
+        custom_raw.append(source_data)
+        CUSTOM_SOURCES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CUSTOM_SOURCES_PATH.write_text(json.dumps(custom_raw, indent=2, ensure_ascii=False), encoding="utf-8")
+    
+    if source_obj.id not in BY_ID:
+        SOURCES.append(source_obj)
+        BY_ID[source_obj.id] = source_obj
+    return source_obj
 
 
 def known_sources(ids: Iterable[str], where: str) -> tuple[str, ...]:

@@ -11,9 +11,10 @@
 </header>
 
 <section class="imports" aria-label="Import sources">
-  <button type="button" class="chip-btn" data-not-yet>Import glance.yml</button>
-  <button type="button" class="chip-btn" data-not-yet>Import OPML</button>
-  <button type="button" class="chip-btn" data-not-yet>Add URL</button>
+  <input type="file" id="file-importer" accept=".yml,.yaml,.opml,.xml" hidden>
+  <button type="button" class="chip-btn" id="btn-import-glance">Import glance.yml</button>
+  <button type="button" class="chip-btn" id="btn-import-opml">Import OPML</button>
+  <button type="button" class="chip-btn" id="btn-add-url">Add URL</button>
   <p class="notice" role="status" aria-live="polite" data-notice></p>
 </section>
 
