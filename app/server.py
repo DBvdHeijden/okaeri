@@ -46,6 +46,7 @@ from app.sources import (
     tags_for,
 )
 from app.store import Store, default_path, open_store
+from app.sources import add_custom_source
 
 log = logging.getLogger("okaeri")
 
@@ -653,7 +654,87 @@ def onboarding_sources(request: Request):
         "onboarding_sources.html",
         {"groups": list(groups.items()), "selected": selected, "suggested": suggested},
     )
+import xml.etree.ElementTree as ET
+from urllib.parse import urlparse
+import yaml
+from fastapi import UploadFile, File
 
+
+def _make_source_from_url(url: str, name: str = "", medium: str = "blog", tags: list[str] | None = None) -> dict:
+    parsed = urlparse(url)
+    domain = parsed.netloc or parsed.path.split("/")[0]
+    clean_domain = domain.lower().replace("www.", "")
+    source_id = clean_domain.replace(".", "-")
+    return {
+        "id": source_id,
+        "name": name or clean_domain,
+        "medium": medium,
+        "tags": tags or ["tech"],
+        "url": url,
+        "site": clean_domain,
+        "language": "en",
+        "description": f"Custom feed from {clean_domain}",
+    }
+
+
+@app.post("/onboarding/sources/add-url")
+def add_custom_url(url: Annotated[str, Form()]):
+    url = url.strip()
+    if not url:
+        return JSONResponse({"error": "URL cannot be empty"}, status_code=400)
+    source_dict = _make_source_from_url(url)
+    source_obj = add_custom_source(source_dict)
+    return JSONResponse({
+        "status": "ok",
+        "source": {
+            "id": source_obj.id,
+            "name": source_obj.name,
+            "site": source_obj.site,
+            "medium": source_obj.medium,
+            "language": source_obj.language,
+            "description": source_obj.description,
+        }
+    })
+
+
+@app.post("/onboarding/sources/import-file")
+async def import_sources_file(file: UploadFile = File(...)):
+    content = (await file.read()).decode("utf-8", errors="ignore")
+    filename = file.filename.lower()
+    imported = []
+
+    # OPML Parsing
+    if filename.endswith(".opml") or "<opml" in content:
+        try:
+            root = ET.fromstring(content)
+            for outline in root.findall(".//outline"):
+                xml_url = outline.attrib.get("xmlUrl") or outline.attrib.get("url")
+                if xml_url:
+                    title = outline.attrib.get("title") or outline.attrib.get("text") or ""
+                    src = _make_source_from_url(xml_url, name=title)
+                    s_obj = add_custom_source(src)
+                    imported.append(s_obj.id)
+        except Exception as e:
+            return JSONResponse({"error": f"Failed to parse OPML: {e}"}, status_code=400)
+
+    # glance.yml Parsing
+    elif filename.endswith((".yml", ".yaml")):
+        try:
+            data = yaml.safe_load(content)
+            # Glance yml feeds format parsing
+            feeds = data.get("feeds", []) if isinstance(data, dict) else []
+            for f in feeds:
+                f_url = f.get("url") if isinstance(f, dict) else f
+                if f_url:
+                    src = _make_source_from_url(f_url, name=f.get("title", "") if isinstance(f, dict) else "")
+                    s_obj = add_custom_source(src)
+                    imported.append(s_obj.id)
+        except Exception as e:
+            return JSONResponse({"error": f"Failed to parse glance.yml: {e}"}, status_code=400)
+    else:
+        return JSONResponse({"error": "Unsupported file format. Provide OPML or glance.yml"}, status_code=400)
+
+    return JSONResponse({"status": "ok", "imported_count": len(imported), "source_ids": imported})
 
 @app.post("/onboarding/sources")
 def onboarding_sources_submit(request: Request, sources: Annotated[list[str] | None, Form()] = None):

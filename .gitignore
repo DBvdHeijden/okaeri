@@ -8,3 +8,4 @@ settings.json
 *.db
 .DS_Store
 VERSION
+catalog/custom_sources.json

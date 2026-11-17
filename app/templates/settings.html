@@ -56,6 +56,13 @@
       <span class="fold-label">Sources</span>
       <span class="fold-count" data-selected-count>0 selected</span>
     </summary>
+    <section class="imports" aria-label="Import sources">
+      <input type="file" id="file-importer" accept=".yml,.yaml,.opml,.xml" hidden>
+      <button type="button" class="chip-btn" id="btn-import-glance">Import glance.yml</button>
+      <button type="button" class="chip-btn" id="btn-import-opml">Import OPML</button>
+      <button type="button" class="chip-btn" id="btn-add-url">Add URL</button>
+      <p class="notice" role="status" aria-live="polite" data-notice></p>
+    </section>
     <label class="search">
       <span class="visually-hidden">Search sources</span>
       <input type="search" placeholder="Search sources" autocomplete="off" data-source-search>
