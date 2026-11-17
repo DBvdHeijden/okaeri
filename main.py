@@ -1,8 +1,8 @@
 """Run okaeri, or manage it as a background service that starts at login.
 
-    uv run main.py              # run the server in this terminal
-    uv run main.py install      # run it in the background: launchd on macOS, systemd on Linux, Task Scheduler on Windows
-    uv run main.py uninstall | restart | update | status | logs
+uv run main.py              # run the server in this terminal
+uv run main.py install      # run it in the background: launchd on macOS, systemd on Linux, Task Scheduler on Windows
+uv run main.py uninstall | restart | update | status | logs
 """
 
 import argparse
@@ -181,7 +181,10 @@ def running() -> bool:
     if WINDOWS:
         return answering()  # schtasks reports the state in the system's language
     if MAC:
-        return "state = running" in subprocess.run(["launchctl", "print", service_target()], capture_output=True, text=True).stdout
+        return (
+            "state = running"
+            in subprocess.run(["launchctl", "print", service_target()], capture_output=True, text=True).stdout
+        )
     return succeeds("systemctl", "--user", "is-active", "--quiet", NAME)
 
 
@@ -238,7 +241,9 @@ def version() -> str:
 
 
 def latest_commit() -> str:
-    request = urllib.request.Request(f"https://api.github.com/repos/{REPO}/commits/main", headers={"Accept": "application/vnd.github.sha"})
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{REPO}/commits/main", headers={"Accept": "application/vnd.github.sha"}
+    )
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read().decode().strip()
 
@@ -289,10 +294,14 @@ def local_time(iso: str) -> str:
 
 def install() -> None:
     if not (MAC or LINUX or WINDOWS):
-        sys.exit(f"Installing as a service isn't supported on {sys.platform} yet. Run it in a terminal instead: uv run main.py")
+        sys.exit(
+            f"Installing as a service isn't supported on {sys.platform} yet. Run it in a terminal instead: uv run main.py"
+        )
     if WINDOWS and PORT != DEFAULT_PORT:
         # A scheduled task can't set environment variables, so it would start on the default port.
-        sys.exit(f"On Windows the service only runs on port {DEFAULT_PORT} for now. Remove OKAERI_PORT and install again.")
+        sys.exit(
+            f"On Windows the service only runs on port {DEFAULT_PORT} for now. Remove OKAERI_PORT and install again."
+        )
     uv = find_uv()
     if not uv:
         sys.exit("Can't find uv on your PATH. Install it from https://docs.astral.sh/uv/")
@@ -335,7 +344,9 @@ def uninstall() -> None:
         run("systemctl", "--user", "daemon-reload")
     data = ROOT / "data"
     print("Uninstalled the service.")
-    print(f"Your data is still there: {data} (database with your reading history, the model, the log) and settings.json.")
+    print(
+        f"Your data is still there: {data} (database with your reading history, the model, the log) and settings.json."
+    )
     if WINDOWS:
         print(f"To delete it too, delete that folder and {ROOT / 'settings.json'}")
     else:
@@ -399,7 +410,9 @@ def status() -> None:
         "feed": f"{len(feed)} articles, {sum(a.key in embedded for a in feed)} embedded",
         "last fetch": f"{local_time(fetched_at)}, {failing} feeds failing" if fetched_at else "never",
         "last embed": f"{local_time(embed_run[0])}, {embed_run[1]}" if embed_run else "never",
-        "model": f"on disk, {model_bytes / 2**20:.0f} MB" if model_bytes else "not downloaded yet (happens on the first embed run)",
+        "model": f"on disk, {model_bytes / 2**20:.0f} MB"
+        if model_bytes
+        else "not downloaded yet (happens on the first embed run)",
         "log": f"{LOG} ({LOG.stat().st_size / 2**20:.1f} MB)" if LOG.exists() else f"{LOG} (none yet)",
     }
     for name, value in rows.items():

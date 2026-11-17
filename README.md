@@ -3,9 +3,9 @@
 おかえり ("welcome back"): a calm localhost homepage with the latest papers, blogs, forums and news in science and tech.
 It fetches the sources you pick in the background and gathers them on one page, in tabs you set up yourself.
 
-Each tab shows stories newest first, or recommended. For the recommended stories a small embedding model on your machine runs in the background. 
-We register your clicks and hides, and have a simple algorithm for ranking the feed. Your reading history never leaves your device. 
-Your recommendation algorithm is yours, tune it however you'd like (either from the UI, or delve into the code). 
+Each tab shows stories newest first, or recommended. For the recommended stories a small embedding model on your machine runs in the background.
+We register your clicks and hides, and have a simple algorithm for ranking the feed. Your reading history never leaves your device.
+Your recommendation algorithm is yours, tune it however you'd like (either from the UI, or delve into the code).
 
 ![The okaeri homepage: a list of today's stories, with a slowly turning Lorenz figure beside it](.github/main_page.png)
 
@@ -63,7 +63,7 @@ okaeri only goes online to fetch your feeds, download the embedding model from H
 
 ## Sources
 
-The [catalog](catalog/sources.json) has about 90 sources in English and Dutch: papers, blogs, news and forums on AI, software, security, science, space, climate, world news, politics and sports. Think arXiv, Nature, Quanta, Hacker News, Simon Willison and Ars Technica.
+The [catalog](catalog/sources.json) has about 160 sources in English and Dutch: papers, blogs, news and forums on AI, software, the web, hardware, security, science, health, space, climate and energy, philosophy, history, world news, politics and sports. Think arXiv, Nature, Quanta, Hacker News, Simon Willison, SemiAnalysis and Ars Technica.
 
 Pick sources on the Settings page (the gear). Adding your own feeds there is in progress; for now, add one to `catalog/sources.json` and send it as a pull request ([how](CONTRIBUTING.md#common-changes)). You can also list source ids under `sources.enabled` in `settings.json`.
 

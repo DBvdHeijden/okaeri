@@ -17,13 +17,33 @@ from fastapi.templating import Jinja2Templates
 
 from app import settings
 from app.embed import (
-    MODEL, LiveEmbedder, about_document, model_downloaded, pending, source_document, stored_vectors, text_key, topic_document,
+    MODEL,
+    LiveEmbedder,
+    about_document,
+    load_catalog_vectors,
+    model_downloaded,
+    pending,
+    source_document,
+    stored_vectors,
+    text_key,
+    topic_document,
 )
 from app.fetch import Refresher
 from app.models import Article, Event, Source
 from app.rank import learn, rank, sample, switched_on
 from app.sources import (
-    BY_ID, LANGUAGES, MEDIA, SOURCES, TAG_DESCRIPTIONS, TOPICS, in_tab, medium_of, source_matches, speaks, tags_for,
+    BY_ID,
+    LANGUAGES,
+    MEDIA,
+    SOURCES,
+    TAG_DESCRIPTIONS,
+    TOPIC_FAMILIES,
+    TOPICS,
+    in_tab,
+    medium_of,
+    source_matches,
+    speaks,
+    tags_for,
 )
 from app.store import Store, default_path, open_store
 from app.sources import add_custom_source
@@ -45,7 +65,6 @@ HISTORY_SIZE = 100
 HISTORY_VIEWS = {"opened": "Opened", "liked": "Liked", "hidden": "Hidden"}
 
 
-
 def store() -> Store:
     return open_store(default_path())
 
@@ -54,6 +73,7 @@ def store() -> Store:
 async def lifespan(app: FastAPI):
     task = None
     app.state.refresher = None
+    load_catalog_vectors(store())
     if os.environ.get("OKAERI_FETCH", "1") != "0":
         app.state.refresher = Refresher(store(), BY_ID)
         task = asyncio.create_task(app.state.refresher.run())
@@ -63,7 +83,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
 
 
-live = LiveEmbedder()  # onboarding's map, while you're on it
+live = LiveEmbedder()  # the interests you write on onboarding's map, while you're on it
 app = FastAPI(title="okaeri", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
@@ -138,14 +158,14 @@ def history(view: str) -> list[Article]:
     return store().stories(dict(newest), BY_ID)  # the whole catalog: links stay for sources you no longer follow
 
 
-def event_topics(events: list[Event]) -> dict[str, frozenset[str]]:
-    """The topics of the stories you opened, liked or hid, for Recommended's taste per topic. From every story
-    still stored: many have left the feed."""
-    return {a.key: tags_for(a) for a in store().stories({e.key: e.at for e in events}, BY_ID)}
+def event_stories(events: list[Event]) -> dict[str, Article]:
+    """The stories you opened, liked or hid, for how their sources went. From every story still stored: many have
+    left the feed."""
+    return {a.key: a for a in store().stories({e.key: e.at for e in events}, BY_ID)}
 
 
 def recommended(pool: list[Article], events: list[Event]) -> list[Article]:
-    return rank(pool, events, settings.load(), stored_vectors(store()), "recommended", event_topics(events))
+    return rank(pool, events, settings.load(), stored_vectors(store()), "recommended", event_stories(events))
 
 
 def feed(selected: dict[str, Source], tab: dict) -> list[Article]:
@@ -255,6 +275,7 @@ def wake_refresher(request: Request) -> None:
 
 # Settings: the sources you follow, and a way back into onboarding. Onboarding is only for when nothing is picked yet.
 
+
 def tab_editor_context() -> dict:
     """What the tab editor (_tabs.html) needs, in Settings and the onboarding tabs step."""
     tabs = settings.all_tabs()
@@ -283,7 +304,15 @@ def settings_page(request: Request):
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {**tab_editor_context(), **ranking_context(), "groups": groups, "selected": enabled, "languages": LANGUAGES, "spoken": settings.languages(), "progress": background_work(request)},
+        {
+            **tab_editor_context(),
+            **ranking_context(),
+            "groups": groups,
+            "selected": enabled,
+            "languages": LANGUAGES,
+            "spoken": settings.languages(),
+            "progress": background_work(request),
+        },
     )
 
 
@@ -318,6 +347,7 @@ def settings_submit(
 
 # Onboarding: your name (optional), the languages and media you read, what you like to read about, fields, sources,
 # a sample of stories to rate, the ranking, then (optionally) tabs.
+
 
 def spoken_sources() -> list[Source]:
     return [s for s in SOURCES if speaks(s, settings.languages())]
@@ -367,6 +397,7 @@ def onboarding_name_submit(name: Annotated[str, Form()] = ""):
 # the fields it's about (they aren't drawn: a ring of names was a lot to take in), and the sources nearest to it come
 # out of it and are listed beside it. Later steps tick the fields and sources nearest to them.
 
+
 @app.get("/onboarding/about", response_class=HTMLResponse)
 def onboarding_about(request: Request):
     wake_refresher(request)
@@ -382,14 +413,13 @@ def onboarding_about_submit(request: Request, about: Annotated[list[str] | None,
     return RedirectResponse("/onboarding/interests", status_code=303)
 
 
-async def vectors_for(texts: list[str]) -> np.ndarray:
-    """Their vectors, embedding (and saving) the ones not stored yet."""
-    stored = await asyncio.to_thread(stored_vectors, store())
-    if missing := [t for t in dict.fromkeys(texts) if text_key(t) not in stored]:
-        new = await live.embed(missing)
-        await asyncio.to_thread(store().save_embeddings, MODEL, [(text_key(t), v.tobytes()) for t, v in zip(missing, new)])
-        stored |= {text_key(t): v for t, v in zip(missing, new)}
-    return np.vstack([stored[text_key(t)] for t in texts])
+async def vector_for(text: str) -> np.ndarray:
+    """Its vector, embedding (and saving) it if it's not stored yet."""
+    if (vector := (await asyncio.to_thread(stored_vectors, store())).get(text_key(text))) is not None:
+        return vector
+    vector = (await live.embed([text]))[0]
+    await asyncio.to_thread(store().save_embeddings, MODEL, [(text_key(text), vector.tobytes())])
+    return vector
 
 
 def field_ring(topic_vectors: np.ndarray) -> np.ndarray:
@@ -413,16 +443,25 @@ def place(vectors: np.ndarray, topic_vectors: np.ndarray, ring: np.ndarray) -> n
 about_map: dict = {}  # made once: the catalog doesn't change while the server runs
 
 
-async def make_about_map() -> dict:
-    if not about_map:
-        topics = sorted(TOPICS)
-        vectors = await vectors_for([topic_document(t) for t in topics] + [source_document(s) for s in SOURCES])
-        topic_vectors, source_vectors = vectors[: len(topics)], vectors[len(topics) :]
-        ring = field_ring(topic_vectors)
-        about_map.update(
-            topics=topics, topic_vectors=topic_vectors, ring=ring, source_vectors=source_vectors,
-            sources=[{"id": s.id, "name": s.name, "description": s.description} for s in SOURCES],
-        )
+async def make_about_map() -> dict | None:
+    """None until every topic and source has a stored vector: they ship with the repo, and the refresh loop embeds
+    any changed since. Never embedded here, so reloading the step doesn't queue them up again."""
+    if about_map:
+        return about_map
+    topics = sorted(TOPICS)
+    texts = [topic_document(t) for t in topics] + [source_document(s) for s in SOURCES]
+    stored = await asyncio.to_thread(stored_vectors, store())
+    if any(text_key(t) not in stored for t in texts):
+        return None
+    vectors = np.vstack([stored[text_key(t)] for t in texts])
+    topic_vectors, source_vectors = vectors[: len(topics)], vectors[len(topics) :]
+    about_map.update(
+        topics=topics,
+        topic_vectors=topic_vectors,
+        ring=field_ring(topic_vectors),
+        source_vectors=source_vectors,
+        sources=[{"id": s.id, "name": s.name, "description": s.description} for s in SOURCES],
+    )
     return about_map
 
 
@@ -433,30 +472,30 @@ def readable() -> list[int]:
 
 
 def waiting() -> JSONResponse:
-    return JSONResponse({"waiting": True}, status_code=503)  # the model is still downloading: the page asks again
+    # The model is still downloading, or the catalog changed and is being embedded: the page asks again.
+    return JSONResponse({"waiting": True}, status_code=503)
 
 
 @app.get("/onboarding/about/map")
 async def onboarding_about_map():
-    if not model_downloaded():
+    if not model_downloaded() or not (m := await make_about_map()):
         return waiting()
-    m = await make_about_map()
     return {"sources": [m["sources"][i] for i in readable()]}
 
 
 @app.post("/onboarding/about/place")
 async def onboarding_about_place(text: Annotated[str, Form()]):
     """Where one of your interests goes on the map, and the sources about it with how close each is."""
-    if not model_downloaded():
+    if not model_downloaded() or not (m := await make_about_map()):
         return waiting()
-    m = await make_about_map()
-    vector = (await vectors_for([about_document(text.strip()[:100])]))[0]
-    (x, y), = place(vector[None], m["topic_vectors"], m["ring"]).tolist()
+    vector = await vector_for(about_document(text.strip()[:100]))
+    ((x, y),) = place(vector[None], m["topic_vectors"], m["ring"]).tolist()
     indexes = readable()
     candidates = [SOURCES[i] for i in indexes]
     closeness = m["source_vectors"][indexes] @ vector
     return {
-        "x": x, "y": y,
+        "x": x,
+        "y": y,
         "sources": [{"id": candidates[i].id, "closeness": float(closeness[i])} for i in related(closeness, candidates)],
     }
 
@@ -476,7 +515,11 @@ def about_scores(documents: dict[str, str]) -> dict[str, np.ndarray]:
     interests = [vectors[key] for a in settings.about() if (key := text_key(about_document(a))) in vectors]
     if not interests:
         return {}
-    return {i: np.array([v @ vectors[text_key(d)] for v in interests]) for i, d in documents.items() if text_key(d) in vectors}
+    return {
+        i: np.array([v @ vectors[text_key(d)] for v in interests])
+        for i, d in documents.items()
+        if text_key(d) in vectors
+    }
 
 
 def nearest_each(scores: dict[str, np.ndarray], k: int) -> list[str]:
@@ -494,23 +537,41 @@ def onboarding_languages(request: Request):
 def reading_page(request: Request, chosen: set[str], missing: str = "", status_code: int = 200) -> HTMLResponse:
     """Step 2: how you like to read, before what about, so the next step only brings up sources you'll get."""
     groups = [
-        ("Languages", "languages", [(code, name, "", sum(s.language == code for s in SOURCES)) for code, name in LANGUAGES.items()]),
-        ("Media", "media", [(m, medium["label"], medium["description"], sum(s.medium == m for s in SOURCES)) for m, medium in MEDIA.items()]),
+        (
+            "Languages",
+            "languages",
+            [(code, name, "", sum(s.language == code for s in SOURCES)) for code, name in LANGUAGES.items()],
+        ),
+        (
+            "Media",
+            "media",
+            [
+                (m, medium["label"], medium["description"], sum(s.medium == m for s in SOURCES))
+                for m, medium in MEDIA.items()
+            ],
+        ),
     ]
     return templates.TemplateResponse(
-        request, "onboarding_languages.html", {"groups": groups, "chosen": chosen, "missing": missing}, status_code=status_code
+        request,
+        "onboarding_languages.html",
+        {"groups": groups, "chosen": chosen, "missing": missing},
+        status_code=status_code,
     )
 
 
 @app.post("/onboarding/languages")
 def onboarding_languages_submit(
-    request: Request, languages: Annotated[list[str] | None, Form()] = None, media: Annotated[list[str] | None, Form()] = None
+    request: Request,
+    languages: Annotated[list[str] | None, Form()] = None,
+    media: Annotated[list[str] | None, Form()] = None,
 ):
     languages = [lang for lang in languages or [] if lang in LANGUAGES]
     media = [m for m in media or [] if m in MEDIA]
     if not languages or not media:
         # The same step again, with your picks and what's missing. 422: Turbo only shows a failed form's page.
-        missing = " and ".join(word for word, picked in (("one language", languages), ("one medium", media)) if not picked)
+        missing = " and ".join(
+            word for word, picked in (("one language", languages), ("one medium", media)) if not picked
+        )
         return reading_page(request, {*languages, *media}, f"Pick at least {missing}.", 422)
     settings.set_languages(languages)
     settings.set_interests(media, settings.interests()["topics"])
@@ -522,10 +583,21 @@ def interests_page(
 ) -> HTMLResponse:
     # Counted among the sources in the languages and media you read: what each field would actually bring.
     media = settings.interests()["media"]
-    counts = [(t, source_count(lambda s: t in s.tags and s.medium in media)) for t in sorted(TOPICS)]
-    groups = [("Fields", "topics", [(t, t, TAG_DESCRIPTIONS[t], n) for t, n in counts])]
+    # source_count calls the lambda right away, so it sees the current t.
+    counts = {t: source_count(lambda s: t in s.tags and s.medium in media) for t in TOPICS}  # noqa: B023
+    # Your picks up top; every other field one fold away, by family.
+    picked = [t for t in TAG_DESCRIPTIONS if t in chosen]
+    families = [(family, [t for t in topics if t not in chosen]) for family, topics in TOPIC_FAMILIES.items()]
     return templates.TemplateResponse(
-        request, "onboarding_interests.html", {"groups": groups, "chosen": chosen, "missing": missing, "suggested": suggested},
+        request,
+        "onboarding_interests.html",
+        {
+            "picked": picked,
+            "families": [(family, topics) for family, topics in families if topics],
+            "counts": counts,
+            "missing": missing,
+            "suggested": suggested,
+        },
         status_code=status_code,
     )
 
@@ -578,7 +650,9 @@ def onboarding_sources(request: Request):
     selected = selected or [s.id for s in offered]
     groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items()}
     return templates.TemplateResponse(
-        request, "onboarding_sources.html", {"groups": list(groups.items()), "selected": selected, "suggested": suggested}
+        request,
+        "onboarding_sources.html",
+        {"groups": list(groups.items()), "selected": selected, "suggested": suggested},
     )
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
@@ -678,7 +752,8 @@ def sample_pool(shuffle: bool = False, field: str = "") -> list[Article]:
     selected = {i: BY_ID[i] for i in settings.enabled_sources() if i in BY_ID}
     interests = settings.interests()
     pool = [
-        a for a in store().articles(selected)
+        a
+        for a in store().articles(selected)
         if any(source_matches(BY_ID[s], interests["media"], interests["topics"]) for s in a.source_ids)
         and (not field or field in tags_for(a))
     ]
@@ -742,8 +817,11 @@ def onboarding_tune(request: Request, field: str = ""):
         request,
         "onboarding_tune.html",
         {
-            "articles": top_stories(field), "weights": settings.weights(), "field": field,
-            "fields": settings.interests()["topics"], "top_size": TOP_SIZE,
+            "articles": top_stories(field),
+            "weights": settings.weights(),
+            "field": field,
+            "fields": settings.interests()["topics"],
+            "top_size": TOP_SIZE,
         },
     )
 
@@ -796,7 +874,7 @@ def learned_weights() -> dict[str, float]:
     stories = {a.key: a for a in store().articles(BY_ID)}  # with their real publish times, for freshness
     liked = [stories[k] for k in switched_on(events, "seed", "unseed") if k in stories]
     disliked = [stories[k] for k in switched_on(events, "hide", "unhide") if k in stories]
-    return learn(liked, disliked, stored_vectors(store()))
+    return learn(liked, disliked, stored_vectors(store()), list(stories.values()))
 
 
 @app.post("/rate/{id}")
@@ -814,4 +892,3 @@ def rate(request: Request, id: str, rating: Annotated[Literal["up", "down", "non
     if rating == "down" and not hidden:
         store().add_event("hide", key)
     return back(request)
-

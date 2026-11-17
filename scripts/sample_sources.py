@@ -1,5 +1,6 @@
 """Write each source's latest titles into catalog/sources.json, so onboarding can match your interests against what a
-source actually publishes, not just its description. Rerun when you add sources, or now and then.
+source actually publishes, not just its description. Then embed the catalog into catalog/vectors.npz, so onboarding's
+map doesn't have to. Rerun when you add sources, or now and then.
 
     uv run scripts/sample_sources.py
 """
@@ -7,6 +8,7 @@ source actually publishes, not just its description. Rerun when you add sources,
 import asyncio
 import json
 import sqlite3
+import subprocess
 import sys
 import tempfile
 from datetime import timedelta
@@ -31,9 +33,13 @@ with tempfile.TemporaryDirectory() as tmp:
     asyncio.run(refresh(store, SOURCES))
     with sqlite3.connect(path) as db:
         latest = {
-            s.id: [title for title, in db.execute(
-                "SELECT title FROM items WHERE source_id = ? ORDER BY published_at DESC LIMIT ?", (s.id, SAMPLE_SIZE)
-            )]
+            s.id: [
+                title
+                for (title,) in db.execute(
+                    "SELECT title FROM items WHERE source_id = ? ORDER BY published_at DESC LIMIT ?",
+                    (s.id, SAMPLE_SIZE),
+                )
+            ]
             for s in SOURCES
         }
 
@@ -45,3 +51,5 @@ for raw in catalog:
     else:
         print(f"no items from {raw['id']}, keeping its old sample", file=sys.stderr)
 CATALOG.write_text("[\n" + ",\n".join(f"  {json.dumps(raw, ensure_ascii=False)}" for raw in catalog) + "\n]\n")
+# A new process: this one loaded the catalog before the new samples were written.
+subprocess.run([sys.executable, "-m", "app.embed", "catalog"], cwd=ROOT, check=True)
