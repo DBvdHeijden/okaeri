@@ -20,6 +20,7 @@ class Source:
     sample: tuple[str, ...] = ()  # its latest titles, from scripts/sample_sources.py
     fetcher: Fetcher = "rss"
     refresh_minutes: int = 30  # blogs; forums and news override, papers go slower
+    custom: bool = False  # added by you (a URL or an import), not from the catalog
 
 
 @dataclass(frozen=True)

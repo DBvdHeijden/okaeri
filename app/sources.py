@@ -67,7 +67,7 @@ def load_custom_sources_raw() -> list[dict]:
 
 def _load_all_sources() -> list[Source]:
     base_raw = json.loads((ROOT / "catalog" / "sources.json").read_text(encoding="utf-8"))
-    custom_raw = load_custom_sources_raw()
+    custom_raw = [{**raw, "custom": True} for raw in load_custom_sources_raw()]
     all_sources: list[Source] = []
     seen_ids = set()
     for raw in base_raw + custom_raw:
@@ -90,7 +90,7 @@ def add_custom_source(source_data: dict) -> Source:
     global SOURCES, BY_ID
     if existing := next((s for s in SOURCES if s.url == source_data["url"]), None):
         return existing
-    source_obj = _source(source_data)
+    source_obj = _source({**source_data, "custom": True})
     custom_raw = load_custom_sources_raw()
 
     # Apend if ID does not already exist

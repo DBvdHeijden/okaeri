@@ -881,7 +881,7 @@
       noResults.hidden = any;
     });
   };
-    
+
 
 function initCustomSourceImports() {
     const fileInput = document.getElementById("file-importer");
@@ -908,13 +908,21 @@ function initCustomSourceImports() {
       });
     }
 
-    if (btnAddUrl) {
-      btnAddUrl.addEventListener("click", async () => {
-        const url = window.prompt("Enter RSS/Atom feed URL:");
-        if (!url || !url.trim()) return;
+    const addRow = document.querySelector("[data-add-url]");
+    if (btnAddUrl && addRow) {
+      const urlInput = addRow.querySelector("[data-add-url-input]");
+      btnAddUrl.addEventListener("click", () => {
+        addRow.hidden = !addRow.hidden;
+        if (!addRow.hidden) urlInput.focus();
+      });
+
+      const addUrl = async () => {
+        const url = urlInput.value.trim();
+        if (!url) return;
 
         const body = new FormData();
-        body.append("url", url.trim());
+        body.append("url", url);
+        body.append("tag", addRow.querySelector("[data-add-url-tag]").value);
 
         try {
           showNotice("Adding feed URL...");
@@ -923,7 +931,11 @@ function initCustomSourceImports() {
             body,
           });
           const data = await res.json();
-          if (res.ok) {
+          if (res.ok && data.known) {
+            const fields = data.source.tags.length ? ` (${data.source.tags.join(", ")})` : "";
+            showNotice(`${data.source.name} is already in our sources${fields}, so it keeps those fields. Ticked it for you.`);
+            setTimeout(() => location.reload(), 3000);
+          } else if (res.ok) {
             showNotice(`Added ${data.source?.name || "source"}! Refreshing...`);
             setTimeout(() => location.reload(), 900);
           } else {
@@ -932,6 +944,13 @@ function initCustomSourceImports() {
         } catch (err) {
           showNotice("Network error while adding URL.");
         }
+      };
+      addRow.querySelector("[data-add-url-submit]").addEventListener("click", addUrl);
+      // On Settings, Enter would otherwise submit the settings form around it.
+      urlInput.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        addUrl();
       });
     }
 
@@ -975,7 +994,7 @@ function initCustomSourceImports() {
     delete root.dataset.nav;
     shownPath = location.pathname;
   });
-  
+
   // Set up what's on the page: now, and each time Turbo swaps in another (it doesn't run this script again).
   const init = () => {
     unleave();
@@ -988,7 +1007,7 @@ function initCustomSourceImports() {
     initTabsEditor();
     initAboutMap();
     initOnboardingForm();
-    initCustomSourceImports(); 
+    initCustomSourceImports();
   };
   init();
   document.addEventListener("turbo:render", init);

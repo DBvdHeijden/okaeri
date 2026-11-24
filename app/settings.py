@@ -184,6 +184,20 @@ def set_enabled_sources(source_ids: list[str]) -> None:
     save(settings)
 
 
+def added_sources() -> list[str]:
+    """Sources you added by URL or import, including ones the catalog already had."""
+    return load()["added_sources"]
+
+
+def add_sources(source_ids: list[str]) -> None:
+    settings = load()
+    settings["added_sources"] = list(dict.fromkeys(settings["added_sources"] + source_ids))
+    # Before the first onboarding pass nothing is enabled yet, and onboarding ticks added sources itself.
+    if enabled := settings["sources"]["enabled"]:
+        settings["sources"]["enabled"] = list(dict.fromkeys(enabled + source_ids))
+    save(settings)
+
+
 def set_sort(tab_slug: str, sort: str) -> bool:
     """Set one tab's sort, from the switch on the homepage. False if there's no such tab."""
     settings = load()

@@ -464,6 +464,25 @@ h1 {
 }
 .chip-btn:hover { background: var(--chip); }
 
+.add-url {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-basis: 100%;
+}
+.add-url[hidden] { display: none; }
+.add-url :is(input, select) {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.add-url input { flex: 1 1 280px; }
+.add-url input:focus-visible, .add-url select:focus-visible { border-color: var(--accent); outline-offset: 0; }
+
 .notice {
   flex-basis: 100%;
   margin: 0;

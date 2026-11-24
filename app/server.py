@@ -293,6 +293,7 @@ def tab_editor_context() -> dict:
 
 
 templates.env.filters["source_name"] = lambda id: BY_ID[id].name
+templates.env.globals["topic_families"] = TOPIC_FAMILIES  # the field picker when adding a URL
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -628,12 +629,18 @@ def onboarding_interests_submit(request: Request, topics: Annotated[list[str] | 
 def onboarding_sources(request: Request):
     interests = settings.interests()
     # Only sources in a medium you picked and in one of your fields (or in none, like Hacker News): onboarding stays
-    # short, and Settings has them all.
-    offered = [s for s in spoken_sources() if source_matches(s, interests["media"], interests["topics"])]
+    # short, and Settings has them all. Sources you added yourself always show, or adding one would seem to do nothing;
+    # that includes a catalog source you added by its URL.
+    yours = {s.id for s in SOURCES if s.custom} | set(settings.added_sources())
+    offered = [
+        s for s in spoken_sources() if s.id in yours or source_matches(s, interests["media"], interests["topics"])
+    ]
     # A fold per field you picked, as in the step before; each source once, under the first of yours it covers.
-    groups: dict[str, list[Source]] = {t: [] for t in interests["topics"]} | {"general": []}
+    # Yours without one of those fields go in their own fold, first, so you see what you just added.
+    groups: dict[str, list[Source]] = {"custom": []} | {t: [] for t in interests["topics"]} | {"general": []}
     for s in offered:
-        groups[next((t for t in interests["topics"] if t in s.tags), "general")].append(s)
+        fallback = "custom" if s.id in yours else "general"
+        groups[next((t for t in interests["topics"] if t in s.tags), fallback)].append(s)
     groups = {label: sources for label, sources in groups.items() if sources}
     # The first time through, each interest you wrote ticks the sources about it (as in step 3), and each fold its best one;
     # in each fold, the nearest (to any of your interests) first. Without interests, all start ticked.
@@ -648,7 +655,7 @@ def onboarding_sources(request: Request):
         scored = [s for s in offered if s.id in scores]
         by_interest = np.array([scores[s.id] for s in scored]).T
         about = [scored[i].id for closeness in by_interest for i in related(closeness, scored)]
-        selected = list(dict.fromkeys(about + best_per_fold))
+        selected = list(dict.fromkeys(about + best_per_fold + [s.id for s in offered if s.id in yours]))
         suggested = True
     selected = selected or [s.id for s in offered]
     groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items()}
@@ -659,7 +666,7 @@ def onboarding_sources(request: Request):
     )
 
 
-def _make_source_from_url(url: str, name: str = "", medium: str = "blog", tags: list[str] | None = None) -> dict:
+def _make_source_from_url(url: str, name: str = "", tag: str = "") -> dict:
     parsed = urlsplit(url)
     domain = parsed.netloc or parsed.path.split("/")[0]
     clean_domain = domain.lower().replace("www.", "")
@@ -668,8 +675,8 @@ def _make_source_from_url(url: str, name: str = "", medium: str = "blog", tags: 
     return {
         "id": source_id,
         "name": name or clean_domain,
-        "medium": medium,
-        "tags": tags or ["tech"],
+        "medium": "blog",
+        "tags": [tag] if tag else [],
         "url": url,
         "site": clean_domain,
         "language": "en",
@@ -678,16 +685,21 @@ def _make_source_from_url(url: str, name: str = "", medium: str = "blog", tags: 
 
 
 @app.post("/onboarding/sources/add-url")
-def add_custom_url(url: Annotated[str, Form()]):
+def add_custom_url(url: Annotated[str, Form()], tag: Annotated[str, Form()] = ""):
     url = url.strip()
     if not url:
         return JSONResponse({"error": "URL cannot be empty"}, status_code=400)
-    source_dict = _make_source_from_url(url)
+    # A feed we already have keeps its own fields; the page tells you which, since your field won't apply.
+    known = any(s.url == url for s in SOURCES)
+    source_dict = _make_source_from_url(url, tag=tag)
     source_obj = add_custom_source(source_dict)
+    settings.add_sources([source_obj.id])
     return JSONResponse(
         {
             "status": "ok",
+            "known": known,
             "source": {
+                "tags": list(source_obj.tags),
                 "id": source_obj.id,
                 "name": source_obj.name,
                 "site": source_obj.site,
@@ -736,6 +748,7 @@ async def import_sources_file(file: Annotated[UploadFile, File()]):
     else:
         return JSONResponse({"error": "Unsupported file format. Provide OPML or glance.yml"}, status_code=400)
 
+    settings.add_sources(imported)
     return JSONResponse({"status": "ok", "imported_count": len(imported), "source_ids": imported})
 
 
