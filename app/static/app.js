@@ -880,12 +880,104 @@
       }
       noResults.hidden = any;
     });
+  };
 
+
+function initCustomSourceImports() {
+    const fileInput = document.getElementById("file-importer");
+    const btnGlance = document.getElementById("btn-import-glance");
+    const btnOpml = document.getElementById("btn-import-opml");
+    const btnAddUrl = document.getElementById("btn-add-url");
     const notice = document.querySelector("[data-notice]");
-    for (const btn of document.querySelectorAll("[data-not-yet]")) {
-      btn.addEventListener("click", () => {
-        notice.textContent = `${btn.textContent.trim()} isn't there yet, but it's coming.`;
-        if (!REDUCED) notice.animate([{ opacity: 0 }, {}], { duration: 160, easing: "ease-out" });
+
+    function showNotice(msg) {
+      if (notice) notice.textContent = msg;
+    }
+
+    if (btnGlance && fileInput) {
+      btnGlance.addEventListener("click", () => {
+        fileInput.accept = ".yml,.yaml";
+        fileInput.click();
+      });
+    }
+
+    if (btnOpml && fileInput) {
+      btnOpml.addEventListener("click", () => {
+        fileInput.accept = ".opml,.xml";
+        fileInput.click();
+      });
+    }
+
+    const addRow = document.querySelector("[data-add-url]");
+    if (btnAddUrl && addRow) {
+      const urlInput = addRow.querySelector("[data-add-url-input]");
+      btnAddUrl.addEventListener("click", () => {
+        addRow.hidden = !addRow.hidden;
+        if (!addRow.hidden) urlInput.focus();
+      });
+
+      const addUrl = async () => {
+        const url = urlInput.value.trim();
+        if (!url) return;
+
+        const body = new FormData();
+        body.append("url", url);
+        body.append("tag", addRow.querySelector("[data-add-url-tag]").value);
+
+        try {
+          showNotice("Adding feed URL...");
+          const res = await fetch("/onboarding/sources/add-url", {
+            method: "POST",
+            body,
+          });
+          const data = await res.json().catch(() => ({})); // a server error has no JSON body
+          if (res.ok && data.known) {
+            const fields = data.source.tags.length ? ` (${data.source.tags.join(", ")})` : "";
+            showNotice(`${data.source.name} is already in our sources${fields}, so it keeps those fields. Ticked it for you.`);
+            setTimeout(() => location.reload(), 3000);
+          } else if (res.ok) {
+            showNotice(`Added ${data.source?.name || "source"}! Refreshing...`);
+            setTimeout(() => location.reload(), 900);
+          } else {
+            showNotice(data.error || "Failed to add URL.");
+          }
+        } catch (err) {
+          showNotice("Network error while adding URL.");
+        }
+      };
+      addRow.querySelector("[data-add-url-submit]").addEventListener("click", addUrl);
+      // On Settings, Enter would otherwise submit the settings form around it.
+      urlInput.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        addUrl();
+      });
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener("change", async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const body = new FormData();
+        body.append("file", file);
+        try {
+          showNotice(`Importing ${file.name}...`);
+          const res = await fetch("/onboarding/sources/import-file", {
+            method: "POST",
+            body,
+          });
+          const data = await res.json().catch(() => ({})); // a server error has no JSON body
+          if (res.ok) {
+            showNotice(`Imported ${data.imported_count} sources! Refreshing...`);
+            setTimeout(() => location.reload(), 900);
+          } else {
+            showNotice(data.error || "Failed to import file.");
+          }
+        } catch (err) {
+          showNotice("Network error while uploading file.");
+        } finally {
+          fileInput.value = "";
+        }
       });
     }
   }
@@ -915,6 +1007,7 @@
     initTabsEditor();
     initAboutMap();
     initOnboardingForm();
+    initCustomSourceImports();
   };
   init();
   document.addEventListener("turbo:render", init);

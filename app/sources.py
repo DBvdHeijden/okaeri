@@ -52,10 +52,60 @@ def _source(raw: dict) -> Source:
     return Source(**{**raw, "tags": tags, "sample": tuple(raw.get("sample", ()))})
 
 
+CUSTOM_SOURCES_PATH = ROOT / "catalog" / "custom_sources.json"
+
+
+# Your file can break (a hand edit, an older version): the sources pages say so rather than the app not starting.
+# A broken catalog entry is ours, so that one still fails loudly.
+CUSTOM_PROBLEMS: list[str] = []
+
+
+def load_custom_sources_raw() -> list[dict]:
+    if not CUSTOM_SOURCES_PATH.exists():
+        return []
+    return json.loads(CUSTOM_SOURCES_PATH.read_text(encoding="utf-8"))
+
+
+def _custom_sources() -> list[Source]:
+    try:
+        raws = load_custom_sources_raw()
+    except json.JSONDecodeError as e:
+        # Adding a source reads the file again and fails the same way, so it never overwrites the ones in there.
+        CUSTOM_PROBLEMS.append(f"{CUSTOM_SOURCES_PATH} failed to load ({e}), so your own sources are missing.")
+        return []
+    sources = []
+    for raw in raws:
+        try:
+            sources.append(_source({**raw, "custom": True}))
+        except (KeyError, TypeError, ValueError) as e:
+            CUSTOM_PROBLEMS.append(f"Your source {raw.get('name') or raw.get('id')!r} failed to load ({e}).")
+    return sources
+
+
 SOURCES: list[Source] = [
     _source(s) for s in json.loads((ROOT / "catalog" / "sources.json").read_text(encoding="utf-8"))
-]
+] + _custom_sources()
+
 BY_ID: dict[str, Source] = {s.id: s for s in SOURCES}
+
+
+def add_custom_source(source_data: dict) -> Source:
+    global SOURCES, BY_ID
+    if existing := next((s for s in SOURCES if s.url == source_data["url"]), None):
+        return existing
+    source_obj = _source({**source_data, "custom": True})
+    custom_raw = load_custom_sources_raw()
+
+    # Apend if ID does not already exist
+    if not any(s.get("id") == source_obj.id for s in custom_raw):
+        custom_raw.append(source_data)
+        CUSTOM_SOURCES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CUSTOM_SOURCES_PATH.write_text(json.dumps(custom_raw, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    if source_obj.id not in BY_ID:
+        SOURCES.append(source_obj)
+        BY_ID[source_obj.id] = source_obj
+    return source_obj
 
 
 def known_sources(ids: Iterable[str], where: str) -> tuple[str, ...]:

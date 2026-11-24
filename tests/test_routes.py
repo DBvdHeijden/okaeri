@@ -1,9 +1,10 @@
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 
-from app import server, settings
-from app.sources import MEDIA, SOURCES
+from app import server, settings, sources
+from app.sources import BY_ID, MEDIA, SOURCES
 from app.store import article_id
 from tests.conftest import item
 
@@ -217,3 +218,56 @@ def test_hide_and_unhide(store):
     assert titles(client.get("/").text) == ["Blog post", "A paper"]
     client.post(f"/unhide/{hidden}")
     assert titles(client.get("/").text) == ["Blog post", "Forum link", "A paper"]
+
+
+@pytest.fixture
+def custom_sources(tmp_path, monkeypatch):
+    monkeypatch.setattr(sources, "CUSTOM_SOURCES_PATH", tmp_path / "custom_sources.json")
+    # Adding a source changes these in place (the server imported the same objects), so put them back after.
+    before = list(SOURCES), dict(BY_ID)
+    yield
+    SOURCES[:] = before[0]
+    BY_ID.clear()
+    BY_ID.update(before[1])
+
+
+def fold_of(source_id: str, html: str) -> str | None:
+    folds = re.split(r'class="fold-label">', html)[1:]
+    return next((f.split("<")[0] for f in folds if f'value="{source_id}"' in f), None)
+
+
+def test_added_url_shows_under_its_field_and_survives_a_restart(store, custom_sources):
+    settings.set_interests(["forum"], ["ai"])
+    r = client.post("/onboarding/sources/add-url", data={"url": "https://example.org/feed.xml", "tag": "ai"}).json()
+    assert not r["known"]
+    added = r["source"]["id"]
+    assert fold_of(added, client.get("/onboarding/sources").text) == "ai"
+    assert added in [s.id for s in sources._custom_sources()]  # what a restart loads
+
+
+def test_a_feed_we_have_keeps_its_own_fields(store, custom_sources):
+    settings.set_interests(["forum"], ["ai"])
+    r = client.post("/onboarding/sources/add-url", data={"url": "https://danluu.com/atom.xml", "tag": "ai"}).json()
+    assert r["known"] and r["source"]["id"] == "danluu"
+    assert r["source"]["tags"] == ["software", "tech"]
+    assert fold_of("danluu", client.get("/onboarding/sources").text) == "custom"
+    assert not sources.CUSTOM_SOURCES_PATH.exists()
+
+
+def test_glance_import_finds_feeds_inside_widgets(store, custom_sources):
+    glance = b"""
+pages:
+  - columns:
+      - widgets:
+          - type: rss
+            feeds:
+              - url: https://example.org/a.xml
+              - url: https://example.org/b.xml
+"""
+    r = client.post("/onboarding/sources/import-file", files={"file": ("glance.yml", glance)}).json()
+    assert r["imported_count"] == 2 and len(set(r["source_ids"])) == 2
+
+
+def test_a_broken_import_says_what_failed(store, custom_sources):
+    r = client.post("/onboarding/sources/import-file", files={"file": ("feeds.opml", b"<opml><body>")})
+    assert r.status_code == 400 and r.json()["error"].startswith("Failed to parse feeds.opml:")

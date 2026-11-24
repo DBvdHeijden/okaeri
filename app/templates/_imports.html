@@ -1,0 +1,21 @@
+<section class="imports" aria-label="Import sources">
+  <input type="file" id="file-importer" accept=".yml,.yaml,.opml,.xml" hidden>
+  <button type="button" class="chip-btn" id="btn-import-glance">Import glance.yml</button>
+  <button type="button" class="chip-btn" id="btn-import-opml">Import OPML</button>
+  <button type="button" class="chip-btn" id="btn-add-url">Add URL</button>
+  {#- A div, not a form: on Settings this sits inside the settings form, and forms can't nest. #}
+  <div class="add-url" hidden data-add-url>
+    <input type="url" placeholder="https://example.com/feed.xml" aria-label="Feed URL" data-add-url-input>
+    <select aria-label="Field" data-add-url-tag>
+      <option value="">No field</option>
+      {% for family, topics in topic_families.items() %}
+      <optgroup label="{{ family }}">
+        {% for t in topics %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+      </optgroup>
+      {% endfor %}
+    </select>
+    <button type="button" class="chip-btn" data-add-url-submit>Add</button>
+  </div>
+  {% for problem in custom_problems %}<p class="notice">{{ problem }}</p>{% endfor %}
+  <p class="notice" role="status" aria-live="polite" data-notice></p>
+</section>

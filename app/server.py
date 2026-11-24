@@ -1,8 +1,10 @@
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import random
+import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,7 +12,8 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 import numpy as np
-from fastapi import FastAPI, Form, HTTPException, Query, Request
+import yaml
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -33,12 +36,14 @@ from app.models import Article, Event, Source
 from app.rank import learn, rank, sample, switched_on
 from app.sources import (
     BY_ID,
+    CUSTOM_PROBLEMS,
     LANGUAGES,
     MEDIA,
     SOURCES,
     TAG_DESCRIPTIONS,
     TOPIC_FAMILIES,
     TOPICS,
+    add_custom_source,
     in_tab,
     medium_of,
     source_matches,
@@ -289,6 +294,8 @@ def tab_editor_context() -> dict:
 
 
 templates.env.filters["source_name"] = lambda id: BY_ID[id].name
+templates.env.globals["topic_families"] = TOPIC_FAMILIES  # the field picker when adding a URL
+templates.env.globals["custom_problems"] = CUSTOM_PROBLEMS
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -624,12 +631,18 @@ def onboarding_interests_submit(request: Request, topics: Annotated[list[str] | 
 def onboarding_sources(request: Request):
     interests = settings.interests()
     # Only sources in a medium you picked and in one of your fields (or in none, like Hacker News): onboarding stays
-    # short, and Settings has them all.
-    offered = [s for s in spoken_sources() if source_matches(s, interests["media"], interests["topics"])]
+    # short, and Settings has them all. Sources you added yourself always show, or adding one would seem to do nothing;
+    # that includes a catalog source you added by its URL.
+    yours = {s.id for s in SOURCES if s.custom} | set(settings.added_sources())
+    offered = [
+        s for s in spoken_sources() if s.id in yours or source_matches(s, interests["media"], interests["topics"])
+    ]
     # A fold per field you picked, as in the step before; each source once, under the first of yours it covers.
-    groups: dict[str, list[Source]] = {t: [] for t in interests["topics"]} | {"general": []}
+    # Yours without one of those fields go in their own fold, first, so you see what you just added.
+    groups: dict[str, list[Source]] = {"custom": []} | {t: [] for t in interests["topics"]} | {"general": []}
     for s in offered:
-        groups[next((t for t in interests["topics"] if t in s.tags), "general")].append(s)
+        fallback = "custom" if s.id in yours else "general"
+        groups[next((t for t in interests["topics"] if t in s.tags), fallback)].append(s)
     groups = {label: sources for label, sources in groups.items() if sources}
     # The first time through, each interest you wrote ticks the sources about it (as in step 3), and each fold its best one;
     # in each fold, the nearest (to any of your interests) first. Without interests, all start ticked.
@@ -644,7 +657,7 @@ def onboarding_sources(request: Request):
         scored = [s for s in offered if s.id in scores]
         by_interest = np.array([scores[s.id] for s in scored]).T
         about = [scored[i].id for closeness in by_interest for i in related(closeness, scored)]
-        selected = list(dict.fromkeys(about + best_per_fold))
+        selected = list(dict.fromkeys(about + best_per_fold + [s.id for s in offered if s.id in yours]))
         suggested = True
     selected = selected or [s.id for s in offered]
     groups = {label: sorted(sources, key=lambda s: s.id not in selected) for label, sources in groups.items()}
@@ -653,6 +666,83 @@ def onboarding_sources(request: Request):
         "onboarding_sources.html",
         {"groups": list(groups.items()), "selected": selected, "suggested": suggested},
     )
+
+
+def _make_source_from_url(url: str, name: str = "", tag: str = "") -> dict:
+    parsed = urlsplit(url)
+    domain = parsed.netloc or parsed.path.split("/")[0]
+    clean_domain = domain.lower().replace("www.", "")
+    # The domain alone collides for two feeds on one site; a hash of the URL keeps ids stable and distinct.
+    source_id = f"{clean_domain.replace('.', '-')}-{hashlib.sha1(url.encode()).hexdigest()[:6]}"
+    return {
+        "id": source_id,
+        "name": name or clean_domain,
+        "medium": "blog",
+        "tags": [tag] if tag else [],
+        "url": url,
+        "site": clean_domain,
+        "language": "en",
+        "description": f"Custom feed from {clean_domain}",
+    }
+
+
+@app.post("/onboarding/sources/add-url")
+def add_custom_url(url: Annotated[str, Form()], tag: Annotated[str, Form()] = ""):
+    url = url.strip()
+    if not url:
+        return JSONResponse({"error": "URL cannot be empty"}, status_code=400)
+    # A feed we already have keeps its own fields; the page tells you which, since your field won't apply.
+    known = any(s.url == url for s in SOURCES)
+    source_dict = _make_source_from_url(url, tag=tag)
+    source_obj = add_custom_source(source_dict)
+    settings.add_sources([source_obj.id])
+    return JSONResponse(
+        {
+            "status": "ok",
+            "known": known,
+            "source": {
+                "tags": list(source_obj.tags),
+                "id": source_obj.id,
+                "name": source_obj.name,
+                "site": source_obj.site,
+                "medium": source_obj.medium,
+                "language": source_obj.language,
+                "description": source_obj.description,
+            },
+        }
+    )
+
+
+def _opml_feeds(content: str) -> list[tuple[str, str]]:
+    outlines = ET.fromstring(content).iter("outline")
+    return [(o.get("xmlUrl"), o.get("title") or o.get("text") or "") for o in outlines if o.get("xmlUrl")]
+
+
+def _glance_feeds(node) -> list[tuple[str, str]]:
+    # Glance nests feeds in rss widgets (pages > columns > widgets > feeds), so look for them anywhere.
+    if isinstance(node, list):
+        return [feed for item in node for feed in _glance_feeds(item)]
+    if not isinstance(node, dict):
+        return []
+    own = [(f["url"], f.get("title", "")) for f in node.get("feeds", []) if isinstance(f, dict) and f.get("url")]
+    return own + [feed for value in node.values() for feed in _glance_feeds(value)]
+
+
+@app.post("/onboarding/sources/import-file")
+async def import_sources_file(file: Annotated[UploadFile, File()]):
+    content = (await file.read()).decode("utf-8", errors="ignore")
+    filename = file.filename.lower()
+    if not (filename.endswith((".opml", ".yml", ".yaml")) or "<opml" in content):
+        return JSONResponse({"error": "Unsupported file format. Provide OPML or glance.yml"}, status_code=400)
+    # Anything could be in an uploaded file; the message is something you can send us.
+    try:
+        feeds = _glance_feeds(yaml.safe_load(content)) if filename.endswith((".yml", ".yaml")) else _opml_feeds(content)
+    except Exception as e:
+        return JSONResponse({"error": f"Failed to parse {file.filename}: {e}"}, status_code=400)
+
+    imported = [add_custom_source(_make_source_from_url(url, name=title)).id for url, title in feeds]
+    settings.add_sources(imported)
+    return JSONResponse({"status": "ok", "imported_count": len(imported), "source_ids": imported})
 
 
 @app.post("/onboarding/sources")
