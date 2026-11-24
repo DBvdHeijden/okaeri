@@ -29,7 +29,7 @@ On Windows, in PowerShell:
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/DBvdHeijden/okaeri/main/install.ps1 | iex"
 ```
 
-It puts okaeri in `~/okaeri`, or `%USERPROFILE%\okaeri` on Windows (installing [uv](https://docs.astral.sh/uv/) first if you don't have it), and opens http://localhost:12362 in your browser, where you pick your sources. Set it as your browser's homepage.
+It puts okaeri in `~/okaeri`, or `%USERPROFILE%\okaeri` on Windows (installing [uv](https://docs.astral.sh/uv/) first if you don't have it), and opens http://okaeri.localhost:12362 in your browser, where you pick your sources. Set it as your browser's homepage.
 
 Prefer git? `git clone https://github.com/DBvdHeijden/okaeri.git && cd okaeri && uv run main.py install`.
 

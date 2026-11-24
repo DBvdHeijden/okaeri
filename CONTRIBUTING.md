@@ -6,7 +6,7 @@ Thanks for helping out. okaeri stays small on purpose, so the bar is: does this 
 
 ```sh
 git clone git@github.com:DBvdHeijden/okaeri.git && cd okaeri
-uv run main.py                     # run in this terminal: http://127.0.0.1:12362
+uv run main.py                     # run in this terminal: http://okaeri.localhost:12362
 OKAERI_DB=/tmp/x.db uv run main.py # a separate database, so your own history stays clean (default: data/okaeri.db)
 OKAERI_RELOAD=1 uv run main.py     # auto-reload while editing
 OKAERI_FETCH=0 uv run main.py      # don't fetch feeds

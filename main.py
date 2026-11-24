@@ -32,7 +32,9 @@ from app.store import default_path, open_store
 ROOT = Path(__file__).resolve().parent
 DEFAULT_PORT = 12362
 PORT = int(os.environ.get("OKAERI_PORT", DEFAULT_PORT))
-URL = f"http://localhost:{PORT}"
+# Browsers send every *.localhost name to this computer; Python's resolver may not, so check it on 127.0.0.1.
+URL = f"http://okaeri.localhost:{PORT}"
+LOCAL_URL = f"http://127.0.0.1:{PORT}"
 LOG = ROOT / "data" / "okaeri.log"
 VERSION = ROOT / "VERSION"  # the commit an install.sh download came from; git checkouts don't have it
 REPO = "DBvdHeijden/okaeri"
@@ -195,7 +197,7 @@ def port_in_use() -> bool:
 
 def answering() -> bool:
     try:
-        urllib.request.urlopen(URL, timeout=2)
+        urllib.request.urlopen(LOCAL_URL, timeout=2)
         return True
     except OSError:
         return False
