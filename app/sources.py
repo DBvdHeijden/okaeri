@@ -88,6 +88,8 @@ BY_ID: dict[str, Source] = {s.id: s for s in SOURCES}
 
 def add_custom_source(source_data: dict) -> Source:
     global SOURCES, BY_ID
+    if existing := next((s for s in SOURCES if s.url == source_data["url"]), None):
+        return existing
     source_obj = _source(source_data)
     custom_raw = load_custom_sources_raw()
 

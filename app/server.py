@@ -1,8 +1,10 @@
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import random
+import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,7 +12,8 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 import numpy as np
-from fastapi import FastAPI, Form, HTTPException, Query, Request
+import yaml
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -39,6 +42,7 @@ from app.sources import (
     TAG_DESCRIPTIONS,
     TOPIC_FAMILIES,
     TOPICS,
+    add_custom_source,
     in_tab,
     medium_of,
     source_matches,
@@ -46,7 +50,6 @@ from app.sources import (
     tags_for,
 )
 from app.store import Store, default_path, open_store
-from app.sources import add_custom_source
 
 log = logging.getLogger("okaeri")
 
@@ -654,17 +657,14 @@ def onboarding_sources(request: Request):
         "onboarding_sources.html",
         {"groups": list(groups.items()), "selected": selected, "suggested": suggested},
     )
-import xml.etree.ElementTree as ET
-from urllib.parse import urlparse
-import yaml
-from fastapi import UploadFile, File
 
 
 def _make_source_from_url(url: str, name: str = "", medium: str = "blog", tags: list[str] | None = None) -> dict:
-    parsed = urlparse(url)
+    parsed = urlsplit(url)
     domain = parsed.netloc or parsed.path.split("/")[0]
     clean_domain = domain.lower().replace("www.", "")
-    source_id = clean_domain.replace(".", "-")
+    # The domain alone collides for two feeds on one site; a hash of the URL keeps ids stable and distinct.
+    source_id = f"{clean_domain.replace('.', '-')}-{hashlib.sha1(url.encode()).hexdigest()[:6]}"
     return {
         "id": source_id,
         "name": name or clean_domain,
@@ -684,21 +684,23 @@ def add_custom_url(url: Annotated[str, Form()]):
         return JSONResponse({"error": "URL cannot be empty"}, status_code=400)
     source_dict = _make_source_from_url(url)
     source_obj = add_custom_source(source_dict)
-    return JSONResponse({
-        "status": "ok",
-        "source": {
-            "id": source_obj.id,
-            "name": source_obj.name,
-            "site": source_obj.site,
-            "medium": source_obj.medium,
-            "language": source_obj.language,
-            "description": source_obj.description,
+    return JSONResponse(
+        {
+            "status": "ok",
+            "source": {
+                "id": source_obj.id,
+                "name": source_obj.name,
+                "site": source_obj.site,
+                "medium": source_obj.medium,
+                "language": source_obj.language,
+                "description": source_obj.description,
+            },
         }
-    })
+    )
 
 
 @app.post("/onboarding/sources/import-file")
-async def import_sources_file(file: UploadFile = File(...)):
+async def import_sources_file(file: Annotated[UploadFile, File()]):
     content = (await file.read()).decode("utf-8", errors="ignore")
     filename = file.filename.lower()
     imported = []
@@ -735,6 +737,7 @@ async def import_sources_file(file: UploadFile = File(...)):
         return JSONResponse({"error": "Unsupported file format. Provide OPML or glance.yml"}, status_code=400)
 
     return JSONResponse({"status": "ok", "imported_count": len(imported), "source_ids": imported})
+
 
 @app.post("/onboarding/sources")
 def onboarding_sources_submit(request: Request, sources: Annotated[list[str] | None, Form()] = None):
