@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 
 [[package]]
@@ -608,6 +608,7 @@ dependencies = [
     { name = "numpy" },
     { name = "onnxruntime" },
     { name = "python-multipart" },
+    { name = "pyyaml" },
     { name = "tokenizers" },
     { name = "uvicorn" },
 ]
@@ -630,6 +631,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2" },
     { name = "onnxruntime", specifier = ">=1.20" },
     { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "tokenizers", specifier = ">=0.20" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
