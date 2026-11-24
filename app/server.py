@@ -36,6 +36,7 @@ from app.models import Article, Event, Source
 from app.rank import learn, rank, sample, switched_on
 from app.sources import (
     BY_ID,
+    CUSTOM_PROBLEMS,
     LANGUAGES,
     MEDIA,
     SOURCES,
@@ -294,6 +295,7 @@ def tab_editor_context() -> dict:
 
 templates.env.filters["source_name"] = lambda id: BY_ID[id].name
 templates.env.globals["topic_families"] = TOPIC_FAMILIES  # the field picker when adding a URL
+templates.env.globals["custom_problems"] = CUSTOM_PROBLEMS
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -711,43 +713,34 @@ def add_custom_url(url: Annotated[str, Form()], tag: Annotated[str, Form()] = ""
     )
 
 
+def _opml_feeds(content: str) -> list[tuple[str, str]]:
+    outlines = ET.fromstring(content).iter("outline")
+    return [(o.get("xmlUrl"), o.get("title") or o.get("text") or "") for o in outlines if o.get("xmlUrl")]
+
+
+def _glance_feeds(node) -> list[tuple[str, str]]:
+    # Glance nests feeds in rss widgets (pages > columns > widgets > feeds), so look for them anywhere.
+    if isinstance(node, list):
+        return [feed for item in node for feed in _glance_feeds(item)]
+    if not isinstance(node, dict):
+        return []
+    own = [(f["url"], f.get("title", "")) for f in node.get("feeds", []) if isinstance(f, dict) and f.get("url")]
+    return own + [feed for value in node.values() for feed in _glance_feeds(value)]
+
+
 @app.post("/onboarding/sources/import-file")
 async def import_sources_file(file: Annotated[UploadFile, File()]):
     content = (await file.read()).decode("utf-8", errors="ignore")
     filename = file.filename.lower()
-    imported = []
-
-    # OPML Parsing
-    if filename.endswith(".opml") or "<opml" in content:
-        try:
-            root = ET.fromstring(content)
-            for outline in root.findall(".//outline"):
-                xml_url = outline.attrib.get("xmlUrl") or outline.attrib.get("url")
-                if xml_url:
-                    title = outline.attrib.get("title") or outline.attrib.get("text") or ""
-                    src = _make_source_from_url(xml_url, name=title)
-                    s_obj = add_custom_source(src)
-                    imported.append(s_obj.id)
-        except Exception as e:
-            return JSONResponse({"error": f"Failed to parse OPML: {e}"}, status_code=400)
-
-    # glance.yml Parsing
-    elif filename.endswith((".yml", ".yaml")):
-        try:
-            data = yaml.safe_load(content)
-            # Glance yml feeds format parsing
-            feeds = data.get("feeds", []) if isinstance(data, dict) else []
-            for f in feeds:
-                f_url = f.get("url") if isinstance(f, dict) else f
-                if f_url:
-                    src = _make_source_from_url(f_url, name=f.get("title", "") if isinstance(f, dict) else "")
-                    s_obj = add_custom_source(src)
-                    imported.append(s_obj.id)
-        except Exception as e:
-            return JSONResponse({"error": f"Failed to parse glance.yml: {e}"}, status_code=400)
-    else:
+    if not (filename.endswith((".opml", ".yml", ".yaml")) or "<opml" in content):
         return JSONResponse({"error": "Unsupported file format. Provide OPML or glance.yml"}, status_code=400)
+    # Anything could be in an uploaded file; the message is something you can send us.
+    try:
+        feeds = _glance_feeds(yaml.safe_load(content)) if filename.endswith((".yml", ".yaml")) else _opml_feeds(content)
+    except Exception as e:
+        return JSONResponse({"error": f"Failed to parse {file.filename}: {e}"}, status_code=400)
 
+    imported = [add_custom_source(_make_source_from_url(url, name=title)).id for url, title in feeds]
     settings.add_sources(imported)
     return JSONResponse({"status": "ok", "imported_count": len(imported), "source_ids": imported})
 

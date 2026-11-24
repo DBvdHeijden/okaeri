@@ -16,5 +16,6 @@
     </select>
     <button type="button" class="chip-btn" data-add-url-submit>Add</button>
   </div>
+  {% for problem in custom_problems %}<p class="notice">{{ problem }}</p>{% endfor %}
   <p class="notice" role="status" aria-live="polite" data-notice></p>
 </section>

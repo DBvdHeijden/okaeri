@@ -141,11 +141,13 @@ def topic_document(topic: str) -> str:
 
 
 def catalog_texts() -> list[str]:
-    return [source_document(s) for s in SOURCES] + [topic_document(t) for t in TAG_DESCRIPTIONS]
+    # Not your own sources: these vectors ship with the repo, and yours are private.
+    return [source_document(s) for s in SOURCES if not s.custom] + [topic_document(t) for t in TAG_DESCRIPTIONS]
 
 
 def pending_texts(store: Store) -> list[str]:
-    texts = [about_document(a) for a in settings.about()] + catalog_texts()
+    yours = [source_document(s) for s in SOURCES if s.custom]
+    texts = [about_document(a) for a in settings.about()] + catalog_texts() + yours
     done = store.embedded_keys(MODEL)
     return [t for t in texts if text_key(t) not in done]
 

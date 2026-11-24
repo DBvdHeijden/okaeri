@@ -55,33 +55,36 @@ def _source(raw: dict) -> Source:
 CUSTOM_SOURCES_PATH = ROOT / "catalog" / "custom_sources.json"
 
 
+# Your file can break (a hand edit, an older version): the sources pages say so rather than the app not starting.
+# A broken catalog entry is ours, so that one still fails loudly.
+CUSTOM_PROBLEMS: list[str] = []
+
+
 def load_custom_sources_raw() -> list[dict]:
     if not CUSTOM_SOURCES_PATH.exists():
         return []
+    return json.loads(CUSTOM_SOURCES_PATH.read_text(encoding="utf-8"))
+
+
+def _custom_sources() -> list[Source]:
     try:
-        return json.loads(CUSTOM_SOURCES_PATH.read_text(encoding="utf-8"))
-    except Exception as e:
-        log.warning("failed to load custom sources from %s: %s", CUSTOM_SOURCES_PATH, e)
+        raws = load_custom_sources_raw()
+    except json.JSONDecodeError as e:
+        # Adding a source reads the file again and fails the same way, so it never overwrites the ones in there.
+        CUSTOM_PROBLEMS.append(f"{CUSTOM_SOURCES_PATH} failed to load ({e}), so your own sources are missing.")
         return []
+    sources = []
+    for raw in raws:
+        try:
+            sources.append(_source({**raw, "custom": True}))
+        except (KeyError, TypeError, ValueError) as e:
+            CUSTOM_PROBLEMS.append(f"Your source {raw.get('name') or raw.get('id')!r} failed to load ({e}).")
+    return sources
 
 
-def _load_all_sources() -> list[Source]:
-    base_raw = json.loads((ROOT / "catalog" / "sources.json").read_text(encoding="utf-8"))
-    custom_raw = [{**raw, "custom": True} for raw in load_custom_sources_raw()]
-    all_sources: list[Source] = []
-    seen_ids = set()
-    for raw in base_raw + custom_raw:
-        s_id = raw.get("id")
-        if s_id and s_id not in seen_ids:
-            try:
-                all_sources.append(_source(raw))
-                seen_ids.add(s_id)
-            except Exception as e:
-                log.warning("skipping invalid source %s: %s", s_id, e)
-    return all_sources
-
-
-SOURCES: list[Source] = _load_all_sources()
+SOURCES: list[Source] = [
+    _source(s) for s in json.loads((ROOT / "catalog" / "sources.json").read_text(encoding="utf-8"))
+] + _custom_sources()
 
 BY_ID: dict[str, Source] = {s.id: s for s in SOURCES}
 

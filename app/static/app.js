@@ -930,7 +930,7 @@ function initCustomSourceImports() {
             method: "POST",
             body,
           });
-          const data = await res.json();
+          const data = await res.json().catch(() => ({})); // a server error has no JSON body
           if (res.ok && data.known) {
             const fields = data.source.tags.length ? ` (${data.source.tags.join(", ")})` : "";
             showNotice(`${data.source.name} is already in our sources${fields}, so it keeps those fields. Ticked it for you.`);
@@ -966,7 +966,7 @@ function initCustomSourceImports() {
             method: "POST",
             body,
           });
-          const data = await res.json();
+          const data = await res.json().catch(() => ({})); // a server error has no JSON body
           if (res.ok) {
             showNotice(`Imported ${data.imported_count} sources! Refreshing...`);
             setTimeout(() => location.reload(), 900);
